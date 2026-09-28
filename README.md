@@ -26,7 +26,9 @@ installs, just a link.
 
 - **Scoped guest tokens** — each token grants access to a specific set of entities
 - **Time-limited access** — tokens expire after a chosen duration, or never
-- **Scheduled start** — an optional "valid from" time; the expiry is measured from the start, not from creation
+- **Scheduled start** — an optional start time; the link can be shared early and shows a countdown until then
+- **Weekly access windows** — limit a link to recurring days and times (overnight windows supported), in Home Assistant's time zone
+- **Single-use links** — a link that stops after one (or N) guest commands; opening it or a chat-app preview never uses it up
 - **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
@@ -115,6 +117,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Background Color** | Hex color for page background | `#F2F0E9` |
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
+| **Time Zone** | IANA zone for weekly access windows (e.g. `Europe/Madrid`); empty uses Home Assistant's | — |
 
 ### Docker Environment Variables
 
@@ -132,6 +135,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `BRAND_BG` | Background color (hex) | No | `#F2F0E9` |
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
+| `TIMEZONE` | IANA zone for weekly access windows; unset uses Home Assistant's | No | — |
 
 ## Home Assistant Activity Events
 
@@ -229,14 +233,31 @@ excluded for the same reason — no arm/disarm widget needs to set off a siren.
 Every option below is set per link, either when the link is created or afterwards
 from the token's card in the admin dashboard.
 
-### Expiry and scheduled start
+### Timing
 
-Pick a preset duration (1 hour through 1 year), a custom one, or **Never
-expires**. **Valid From** is optional and takes a future date and time: the link
-can be shared straight away but answers "not active yet" with a countdown until
-the start, and the duration runs from that start rather than from creation. A
-3-day link scheduled for next Friday is three days of access beginning next
-Friday. **Activate Now** opens a scheduled link early without moving its expiry.
+Three modes: **Single use**, **No expiry**, or **Set a period** with a start and
+an end. Before its start a link answers "not active yet" with a countdown, so it
+can be shared straight away. **Activate Now** opens a scheduled link early
+without moving its end, and **Schedule** on the card edits the timing later
+(`PATCH /admin/tokens/{id}/schedule`).
+
+Under **Set a period → Advanced**, a link can be limited to weekly windows —
+`{"weekdays": [1, 3], "start": "09:00", "end": "13:00"}`, 0 = Monday — inside
+its period. An end before the start crosses midnight, the weekday is the day the
+window opens, and `24:00` is accepted as an end. Windows are evaluated in Home
+Assistant's configured time zone (read from `/api/config`) unless the
+`timezone` option overrides it; if neither can be read, windowed links fail
+closed. Outside every window every guest route is refused, and the SSE stream
+and camera views stop when a window closes.
+
+**Single use** (`max_uses`, 1–1000) counts one use per guest command Home
+Assistant accepts. Page loads, `/state`, the stream and cameras never count, so
+a chat app unfurling the link cannot spend it; the claim is atomic and refunded
+if the HA call fails. Renew on a used-up link resets its count.
+
+The API's `POST /admin/tokens` takes exactly one of `expires_in_seconds` (a
+duration, measured from the start) or `expires_at` (an absolute epoch second,
+taken as written).
 
 ### PIN
 

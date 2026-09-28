@@ -25,7 +25,7 @@ presentation-only `options` blob. Inert until the add-on's local_network_cidrs
 option is set.
 
 Revision ID: 011
-Revises: 008
+Revises: 010
 Create Date: 2026-09-28
 """
 from typing import Sequence, Union
@@ -33,7 +33,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "011"
-down_revision: Union[str, None] = "008"
+down_revision: Union[str, None] = "010"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

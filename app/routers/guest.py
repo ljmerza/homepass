@@ -1003,7 +1003,9 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
     nothing, so there is no reason to make them come back to do it.
     """
     row = await db.get_token_by_slug(slug)
-    if not row or row["revoked"] or row["expires_at"] <= int(time.time()):
+    # _is_dead, not just revoked/expired: a use-limited link that has spent its
+    # last use is as dead as an expired one, and must not be claimable.
+    if not row or _is_dead(row):
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
@@ -1024,7 +1026,7 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
     # Not unlocked yet, or nothing to claim: the page is where either state is
     # explained, so go back to it rather than restate it here. An admin may
     # have turned binding off while the claim screen sat open.
-    if not _pin_gate_ok(row, request) or not row["device_binding"]:
+    if not await _pin_gate_ok(row, request) or not row["device_binding"]:
         return back_to_page
 
     if row["device_secret_hash"]:

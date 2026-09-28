@@ -119,7 +119,7 @@ A PIN-protected card has **Copy link without PIN** and **QR without PIN**. Each 
 - **Each link is shown once.** Like PINs, links are stored hashed, so copy it or show its QR when you make it. Lost one? Make another.
 - **Manage them in the PIN dialog** (**PIN Protected** on the card). It lists every link with an optional label, when it was made and when it was last used. **Rotate** replaces a link with a new one under the same label; **Revoke** removes it. Both sign out every device that had opened that link — other links and the PIN itself are unaffected.
 - **Changing or removing the PIN, or rotating the token's link, retires all of them.**
-- A link without PIN skips the PIN and nothing else. The IP allowlist, expiry, revocation and a scheduled start all still apply.
+- A link without PIN skips the PIN and nothing else. The IP and country allowlists, expiry, revocation, a use limit, a scheduled start, weekly times and a device lock all still apply.
 - Up to 20 links per token.
 
 ## Locking a link to one device

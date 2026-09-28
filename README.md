@@ -315,10 +315,12 @@ SHA-256 hash. Opening one checks it in constant time against that token's links,
 rate-limited per IP and per link, sets the same PIN session cookie a correct PIN
 would, and redirects to the bare `/g/{slug}` so the code leaves the address bar.
 The code is honoured on that page only — never on `/state`, `/stream`,
-`/command` or the camera routes — and skips the PIN but not the IP allowlist,
-expiry or revocation. The session it sets names the link, so revoking or
-rotating a link signs out the devices it let in. Changing or clearing the PIN,
-or rotating the slug, deletes every link. Up to 20 per token.
+`/command` or the camera routes — and skips the PIN but not the IP or country
+allowlist, expiry, revocation, a use limit, the schedule or a device lock (the
+redirect lands on the claim screen or the countdown when those apply). The
+session it sets names the link, so revoking or rotating a link signs out the
+devices it let in. Changing or clearing the PIN, or rotating the slug, deletes
+every link. Up to 20 per token.
 
 ### Single-device lock
 

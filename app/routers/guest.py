@@ -437,8 +437,10 @@ async def _redeem_access_code(request: Request, row, slug: str, code: str):
     never a bearer credential for the API, only a one-step way to earn the same
     cookie a correct PIN earns — and everything behind the gate is unchanged.
 
-    Callers have already refused revoked and expired tokens and applied the IP
-    allowlist: a link without a PIN skips the keypad, not any other gate.
+    Callers have already refused dead tokens (revoked, expired, used up) and
+    applied the IP and country allowlists: a link without a PIN skips the
+    keypad, not any other gate. The device lock and the schedule are met on the
+    page this redirects to, and on every route after it.
     """
     clean = RedirectResponse(
         url=f"{request.state.ingress_path}/g/{slug}",
@@ -592,6 +594,16 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
     schedule, so the preview is withheld from a device that is not the bound
     one. Revocation, expiry and a spent use limit come before all of them — a
     dead token is dead whatever its schedule said.
+
+    In full: dead → IP allowlist → country allowlist → PIN → device → schedule,
+    then, on /command only, home network → proximity per entity. The network
+    gates lead because they are about where the request comes from, not who
+    sent it, and refusing them says nothing about the link. The PIN precedes
+    the device lock rather than following it: a device refusal confirms the
+    link is claimed, which is more than a forwarded slug should learn. A PIN-free
+    access link only ever stands in for the PIN step — it is redeemed on the
+    page and earns the same cookie — so a link opened that way still meets the
+    device lock and the schedule here, on every route.
     """
     row = await db.get_token_by_slug(slug)
     if not row:

@@ -199,6 +199,17 @@ async def create_token(
     request: Request,
     _: str = Depends(require_admin),
 ) -> dict:
+    return await _create_token(body)
+
+
+async def _create_token(body: TokenCreateRequest, expires_at: int | None = None) -> dict:
+    """Validate a create request and insert the token. Shared with the public API.
+
+    `expires_at` is an absolute expiry the caller has already resolved and
+    checked, and it wins over body.expires_in_seconds. Only the public API
+    passes one; the dashboard always sends a duration, which is anchored to the
+    scheduled start here exactly as it always was.
+    """
     # Validate IP CIDR list if provided
     if body.ip_allowlist:
         for cidr in body.ip_allowlist:
@@ -212,7 +223,8 @@ async def create_token(
 
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
-    expires_at = _expires_at_from(body.expires_in_seconds, starts_at)
+    if expires_at is None:
+        expires_at = _expires_at_from(body.expires_in_seconds, starts_at)
 
     # Ensure slug uniqueness
     existing = await db.get_token_by_slug(slug)
@@ -377,12 +389,17 @@ async def update_token_expiry(
     # now instead would hand a still-pending token an expiry it might already
     # have passed by the time the link began working.
     new_expires = _expires_at_from(body.expires_in_seconds, row["starts_at"])
-    await db.update_token_expiry(token_id, new_expires)
-    # Un-revoke if the token was revoked (admin is explicitly renewing it)
-    if row["revoked"]:
-        await db.unrevoke_token(token_id)
+    await _renew_token(row, new_expires)
     row = await db.get_token_by_id(token_id)
     return _row_to_response(row)
+
+
+async def _renew_token(row: Any, expires_at: int) -> None:
+    """Set a new expiry and clear a revocation. Shared with the public API."""
+    await db.update_token_expiry(row["id"], expires_at)
+    # Un-revoke if the token was revoked (admin is explicitly renewing it)
+    if row["revoked"]:
+        await db.unrevoke_token(row["id"])
 
 
 @router.patch("/tokens/{token_id}/pin")

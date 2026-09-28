@@ -5,11 +5,8 @@ entity from anywhere, but a command for it is only forwarded when the request
 comes from one of the local_network_cidrs ranges — the house's own Wi-Fi, say.
 
 What this is and is not. It trusts the client address the guest router
-resolves (_client_ip), which is only as good as the reverse proxy in front of
-HomePass: one that overwrites X-Forwarded-For with the real peer makes this a
-real network check; one that passes a client-supplied header through, or none
-at all, makes it spoofable, exactly as the per-token IP allowlist already is.
-And "on the home network" is not "at the door" — anyone on the Wi-Fi, or on a
+resolves (app/client_ip.py), which only takes X-Forwarded-For from a trusted
+proxy — so it is as good as the trusted_proxies setting. And "on the home network" is not "at the door" — anyone on the Wi-Fi, or on a
 VPN into it, passes. It stops a link being used to open a lock from across
 town, which is the case it exists for.
 

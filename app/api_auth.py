@@ -12,6 +12,7 @@ import hmac
 from fastapi import HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
+from app.client_ip import client_ip as resolve_client_ip
 from app.config import API_TOKEN_MIN_LENGTH, settings
 from app.rate_limiter import RateLimiter
 
@@ -47,13 +48,8 @@ def api_enabled() -> bool:
 
 
 def _client_ip(request: Request) -> str:
-    # Same source as the guest routes and the login limiter. It is spoofable
-    # without a reverse proxy that overwrites X-Forwarded-For, which only costs
-    # the limiter its per-IP accuracy — the key check does not depend on it.
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    # Same source as the guest routes and the login limiter (app/client_ip.py).
+    return resolve_client_ip(request)
 
 
 def keys_match(presented: str | None) -> bool:

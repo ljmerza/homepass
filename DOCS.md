@@ -38,6 +38,7 @@ Set these options in the add-on Configuration tab:
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
 | **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
 | **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
+| **Trusted Proxies** | Comma-separated CIDRs of reverse proxies allowed to report the visitor's address in `X-Forwarded-For`. Leave empty to trust Home Assistant's internal network (`172.30.32.0/23`), which covers ingress and proxy add-ons such as NGINX Proxy Manager or Cloudflared. Set it if your proxy runs elsewhere (e.g., `192.168.1.10/32`). The IP and country allowlists, the home-network check and rate limits all use this address; a proxy that isn't trusted makes every guest look like the proxy, and HomePass logs a warning naming it. |
 | **Enable API** | Serve the REST API under `/api/v1` for automations and Node-RED. Off by default. See [Public API](#public-api). |
 | **API Token** | Key for the REST API, sent as the `X-API-Key` header. Required when the API is enabled, min 32 characters. |
 
@@ -145,7 +146,7 @@ Any controllable entity can be marked **Require the guest to be at the property*
 
 Set **Home Network Ranges** in the add-on options, and any controllable entity can be marked **Only from the home network**. The guest still sees the control and its state wherever they are, but pressing it only works when they are connected to one of those ranges — your Wi-Fi, typically. Locks, covers and buttons are ticked for you when you add them to a link; untick one for a guest you trust to use it from anywhere.
 
-- **It relies on the address your reverse proxy reports**, the same as the IP allowlist.
+- **It relies on the client address** described under **Trusted Proxies**, the same as the IP allowlist.
 - **If guests use a public link at home**, through a tunnel or Nabu Casa, their requests may arrive from your public IP rather than a home address. Add your public IP to the ranges in that case.
 - **Clearing the option turns the check off** for every link, including entities already marked.
 
@@ -168,7 +169,7 @@ Each token's card offers:
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 
-**IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It only means anything if HomePass sits behind a reverse proxy that overwrites the client address; on a bare LAN setup it is easy to bypass. To change it later, duplicate the link and revoke the old one.
+**IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It checks the address described under **Trusted Proxies** in [Configuration](#configuration). To change it later, duplicate the link and revoke the old one.
 
 **Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
 

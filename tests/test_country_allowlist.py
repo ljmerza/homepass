@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from starlette.datastructures import Headers
 
 from app import database as db
 from app import geoip
@@ -195,7 +196,7 @@ async def test_stream_gate_matches(geo_db, test_db):
 
     await _make_token("geo")
     def req(ip):
-        return SimpleNamespace(headers=_from(ip), cookies={}, client=SimpleNamespace(host=ip))
+        return SimpleNamespace(headers=Headers(_from(ip)), cookies={}, client=SimpleNamespace(host=ip))
     assert await _validate_token("geo", req(GB_IP), allow_pending=True)
     with pytest.raises(HTTPException) as exc:
         await _validate_token("geo", req(US_IP), allow_pending=True)

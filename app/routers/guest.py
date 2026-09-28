@@ -33,6 +33,7 @@ from app import local_network
 from app import proximity
 from app import schedule
 from app.build import BUILD_VERSION, STATIC_DIR
+from app.client_ip import client_ip as resolve_client_ip
 from app.config import settings
 from app.context import base_context
 from app.models import (
@@ -227,16 +228,10 @@ templates = Jinja2Templates(directory="templates")
 # ---------------------------------------------------------------------------
 
 def _client_ip(request: Request) -> str:
-    """Extract the client IP from X-Forwarded-For (set by reverse proxy).
-
-    IMPORTANT: HomePass MUST be deployed behind a reverse proxy (Caddy, nginx,
-    Cloudflare Tunnel, etc.) that overwrites the X-Forwarded-For header with the
-    true client IP. Without this, clients can spoof their IP to bypass allowlists.
+    """The guest's address. X-Forwarded-For is only believed from a trusted
+    proxy (the trusted_proxies option) — see app/client_ip.py.
     """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return resolve_client_ip(request)
 
 
 def _enforce_ip_allowlist(row, request: Request) -> None:

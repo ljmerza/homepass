@@ -26,6 +26,9 @@ configuration:
   local_network_cidrs:
     name: Home Network Ranges
     description: "Comma-separated CIDRs that count as your home network (e.g., 192.168.1.0/24). Controls marked 'Only from the home network' accept commands only from these. Leave empty to turn this off."
+  trusted_proxies:
+    name: Trusted Proxies
+    description: "Comma-separated CIDRs of reverse proxies allowed to report the visitor's address (X-Forwarded-For). Leave empty to trust Home Assistant's internal network (ingress and proxy add-ons such as NGINX Proxy Manager or Cloudflared). Set it if your proxy runs elsewhere, e.g. 192.168.1.10/32."
   api_enabled:
     name: Enable API
     description: "Serve the REST API under /api/v1 for Home Assistant automations, Node-RED and other integrations. Off by default."

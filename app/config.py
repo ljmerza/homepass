@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # string rather than list[str] because pydantic-settings would demand JSON
     # for a list, and the add-on option is typed by a person.
     local_network_cidrs: str = ""
+    # Comma-separated CIDRs of reverse proxies allowed to report the client
+    # address in X-Forwarded-For. Loopback is always trusted; empty means, in
+    # add-on mode, Home Assistant's internal network (ingress and proxy
+    # add-ons) and, standalone, loopback only. See app/client_ip.py.
+    trusted_proxies: str = ""
     # The offline IP-to-country database behind per-token country allowlists.
     # The image bakes one in at build time (see the Dockerfile); a missing file
     # is not an error, it only means no link can be given a country allowlist.
@@ -82,6 +87,19 @@ class Settings(BaseSettings):
                 ipaddress.ip_network(cidr, strict=False)
             except ValueError:
                 raise ValueError(f"local_network_cidrs: invalid CIDR {cidr!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_trusted_proxies(self):
+        # Refuse to start on a typo, as for local_network_cidrs: a dropped
+        # range is a proxy whose guests all silently become the proxy.
+        for cidr in (c.strip() for c in self.trusted_proxies.split(",")):
+            if not cidr:
+                continue
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError:
+                raise ValueError(f"trusted_proxies: invalid CIDR {cidr!r}")
         return self
 
     @model_validator(mode="after")

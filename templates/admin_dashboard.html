@@ -217,6 +217,11 @@
         <input id="f-pin" type="text" inputmode="numeric" maxlength="8" placeholder="Leave blank for no PIN"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
         <p class="text-xs text-muted mt-1">Guests must enter this before the link shows anything.</p>
+        <label class="flex items-center gap-2.5 cursor-pointer mt-3">
+          <input id="f-remember-pin" type="checkbox" checked class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+          <span class="text-sm">Remember the PIN on the guest's device</span>
+        </label>
+        <p class="text-xs text-muted mt-1 ml-6.5">Off, the guest enters the PIN again every time they reopen the link.</p>
       </div>
       <div>
         <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Entities</label>
@@ -379,11 +384,47 @@
       <input id="pin-input-field" type="text" inputmode="numeric" maxlength="8" placeholder="e.g. 4821"
         class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
     </div>
-    <p class="text-xs text-muted/70 mt-2">PINs are stored hashed and can never be shown again. Saving a new PIN — or removing one — signs out every guest who had already entered the old one.</p>
+    <p class="text-xs text-muted/70 mt-2">PINs are stored hashed and can never be shown again. Saving a new PIN — or removing one — signs out every guest who had already entered the old one, and retires every link without PIN.</p>
     <div id="pin-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
       <button data-action="close-modal" data-modal="pin" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
       <button data-action="submit-pin" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+    </div>
+
+    <div class="mt-4 pt-4 border-t border-border-light dark:border-border-dark">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="pin-remember-field" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">Remember the PIN on the guest's device</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">Saved as soon as you change it, separately from the PIN above. Off, the guest enters the PIN again every time they reopen the link — and anyone it was already remembered for is asked again now.</p>
+    </div>
+
+    <div id="pin-links-section" class="hidden mt-4 pt-4 border-t border-border-light dark:border-border-dark">
+      <div class="text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Links without PIN</div>
+      <p class="text-[11px] text-muted mb-3">Opens straight to the controls, skipping the keypad. Each link is shown once, when it is made — revoke or rotate one to sign out the devices that used it.</p>
+      <ul id="pin-links-list" class="space-y-2 mb-3"></ul>
+      <div class="flex gap-2">
+        <label for="pin-link-label" class="sr-only">Label for the new link</label>
+        <input id="pin-link-label" type="text" maxlength="64" placeholder="Label (optional), e.g. Front door QR"
+          class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <button data-action="create-access-link" class="px-3 py-2 text-xs font-display font-semibold rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">add_link</span> New link
+        </button>
+      </div>
+      <div id="pin-link-new" class="hidden mt-3 p-3 rounded-xl bg-ink/5 border border-ink/20">
+        <div class="text-[11px] text-muted mb-1">New link — copy it now, it will not be shown again:</div>
+        <div id="pin-link-new-url" class="text-xs font-mono break-all mb-2"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="pin-link-new-copy" data-action="copy-url"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Copy link without PIN
+          </button>
+          <button id="pin-link-new-qr" data-action="show-access-link-qr"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR without PIN
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -411,6 +452,7 @@
       </button>
     </div>
     <canvas id="qr-canvas" width="256" height="256" class="mx-auto mb-3"></canvas>
+    <p id="qr-note" class="hidden text-xs text-amber-600 dark:text-amber-400 mb-2"></p>
     <a id="qr-url" target="_blank" rel="noopener noreferrer"
        class="block text-xs text-muted hover:text-primary font-mono break-all mb-4 underline decoration-dotted underline-offset-2 transition-colors"></a>
     <button id="qr-copy-btn" data-action="copy-url" class="w-full py-2.5 rounded-xl border border-border-light dark:border-border-dark text-sm font-display font-medium hover:bg-soot/5 dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-1.5">
@@ -768,6 +810,16 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.has_pin ? 'lock' : 'lock_open'}</span> ${t.has_pin ? 'PIN Protected' : 'Add PIN'}
           </button>
         </div>
+        ${t.has_pin ? `<div class="grid grid-cols-2 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="copy-link-without-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Make a new link that skips the PIN and copy it">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key_off</span> Copy link without PIN
+          </button>
+          <button data-id="${esc(t.id)}" data-action="qr-without-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Make a new link that skips the PIN and show its QR code">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR without PIN
+          </button>
+        </div>` : ''}
         ${status === 'scheduled' ? `<div class="mt-2">
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-activate"
             class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-colors">
@@ -1120,6 +1172,9 @@ function openCreateModal(preset = {}) {
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
+  // A policy, not a secret, so a duplicate carries it the way it carries the
+  // IP allowlist — unlike the PIN itself, which is hashed and belongs to one guest.
+  document.getElementById('f-remember-pin').checked = preset.rememberPin !== false;
   document.getElementById('f-expiry').value = preset.expiryValue || '86400';
   document.getElementById('create-error').textContent = '';
   document.getElementById('f-custom-expiry').classList.add('hidden');
@@ -1162,6 +1217,7 @@ async function submitCreate() {
     starts_at: startsAt,
     ip_allowlist: ipList,
     pin,
+    remember_pin: document.getElementById('f-remember-pin').checked,
   };
 
     const r = await fetch(`${BASE}/admin/tokens`, {
@@ -1193,6 +1249,7 @@ async function duplicateToken(tokenId) {
     label: `${token.label} copy`,
     entityIds: token.entity_ids || [],
     ipAllowlist: token.ip_allowlist || [],
+    rememberPin: token.remember_pin,
     expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
   });
 }
@@ -1285,10 +1342,154 @@ function openPinModal(tokenId, label) {
     t?.has_pin ? 'A PIN is currently set.' : 'No PIN is set — this link opens straight away.';
   document.getElementById('pin-input-field').value = '';
   document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-remember-field').checked = t?.remember_pin !== false;
+  document.getElementById('pin-link-label').value = '';
+  document.getElementById('pin-link-new').classList.add('hidden');
+  document.getElementById('pin-links-section').classList.toggle('hidden', !t?.has_pin);
+  document.getElementById('pin-links-list').innerHTML = '';
   openModal('pin-modal');
+  if (t?.has_pin) loadAccessLinks(tokenId);
 }
 
 function closePinModal() { closeModal('pin-modal'); pinTokenId = null; }
+
+async function saveRememberPin(checked) {
+  if (!pinTokenId) return;
+  const box = document.getElementById('pin-remember-field');
+  const r = await fetch(`${BASE}/admin/tokens/${pinTokenId}/remember-pin`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ remember_pin: checked }),
+  });
+  if (r.ok) {
+    showToast(checked ? 'PIN will be remembered' : 'PIN will be asked every visit', 'success');
+    loadTokens();
+  } else {
+    // Put the box back so it never shows a setting the server did not take.
+    box.checked = !checked;
+    showToast('Error saving setting', 'error');
+  }
+}
+
+// ── Links without PIN ─────────────────────────────────────────────────
+// The server keeps only a hash of each code and returns the code itself once,
+// in the response that minted or rotated it. So a link can be copied or shown
+// as a QR at that moment and never again — every "without PIN" button on a
+// card makes a fresh link, and the list here shows labels, not URLs.
+function accessLinkUrl(slug, code) {
+  return `${guestLink(slug)}?c=${encodeURIComponent(code)}`;
+}
+
+async function mintAccessLink(tokenId, label = null) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ label }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    showToast(err.detail || 'Error creating link', 'error');
+    return null;
+  }
+  return r.json();
+}
+
+async function copyLinkWithoutPin(tokenId) {
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const entry = await mintAccessLink(tokenId);
+  if (entry) copyUrl(accessLinkUrl(t.slug, entry.code));
+}
+
+async function qrWithoutPin(tokenId) {
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const entry = await mintAccessLink(tokenId);
+  if (entry) showAccessLinkQr(accessLinkUrl(t.slug, entry.code));
+}
+
+function showAccessLinkQr(url) {
+  showQr(url, 'Anyone who scans this skips the PIN. Revoke it under PIN Protected if it goes astray.');
+}
+
+async function loadAccessLinks(tokenId) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes`);
+  if (!r.ok || tokenId !== pinTokenId) return;
+  renderAccessLinks(await r.json());
+}
+
+function renderAccessLinks(entries) {
+  const list = document.getElementById('pin-links-list');
+  if (!entries.length) {
+    list.innerHTML = '<li class="text-xs text-muted">No links without PIN yet.</li>';
+    return;
+  }
+  list.innerHTML = entries.map(e => `<li class="flex items-center gap-2 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark">
+    <div class="flex-1 min-w-0">
+      <div class="text-sm truncate">${e.label ? esc(e.label) : '<span class="text-muted">Unlabelled</span>'}</div>
+      <div class="text-[11px] text-muted">Made ${relativeTime(e.created_at)} · ${e.last_used_at ? `Used ${relativeTime(e.last_used_at)}` : 'Never used'}</div>
+    </div>
+    <button data-code-id="${esc(e.id)}" data-action="confirm-rotate-access-link" aria-label="Rotate link" title="Replace with a new link"
+      class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <span aria-hidden="true" class="material-symbols-outlined text-sm">autorenew</span>
+    </button>
+    <button data-code-id="${esc(e.id)}" data-action="confirm-revoke-access-link" aria-label="Revoke link" title="Revoke"
+      class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+      <span aria-hidden="true" class="material-symbols-outlined text-sm">link_off</span>
+    </button>
+  </li>`).join('');
+}
+
+function showNewAccessLink(slug, entry) {
+  const url = accessLinkUrl(slug, entry.code);
+  document.getElementById('pin-link-new-url').textContent = url;
+  document.getElementById('pin-link-new-copy').dataset.url = url;
+  document.getElementById('pin-link-new-qr').dataset.url = url;
+  document.getElementById('pin-link-new').classList.remove('hidden');
+}
+
+async function createAccessLink() {
+  const tokenId = pinTokenId;
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const label = document.getElementById('pin-link-label').value.trim().slice(0, 64) || null;
+  const entry = await mintAccessLink(tokenId, label);
+  if (!entry || tokenId !== pinTokenId) return;
+  document.getElementById('pin-link-label').value = '';
+  showNewAccessLink(t.slug, entry);
+  loadAccessLinks(tokenId);
+}
+
+function confirmRotateAccessLink(codeId) {
+  const tokenId = pinTokenId;
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  openConfirmModal('Rotate Link Without PIN', 'This link stops working and every device that opened it is asked for the PIN. A new link with the same label is shown once.', async () => {
+    const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes/${codeId}/rotate`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      showToast(err.detail || 'Error rotating link', 'error');
+      return;
+    }
+    const entry = await r.json();
+    showToast('Link rotated', 'success');
+    if (tokenId !== pinTokenId) return;
+    showNewAccessLink(t.slug, entry);
+    loadAccessLinks(tokenId);
+  });
+}
+
+function confirmRevokeAccessLink(codeId) {
+  const tokenId = pinTokenId;
+  openConfirmModal('Revoke Link Without PIN', 'This link stops working and every device that opened it is asked for the PIN.', async () => {
+    const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes/${codeId}`, { method: 'DELETE' });
+    if (!r.ok) { showToast('Error revoking link', 'error'); return; }
+    showToast('Link revoked', 'success');
+    if (tokenId !== pinTokenId) return;
+    document.getElementById('pin-link-new').classList.add('hidden');
+    loadAccessLinks(tokenId);
+  });
+}
 
 async function submitPin() {
   if (!pinTokenId) return;
@@ -1429,7 +1630,7 @@ async function confirmActivate(id, label) {
 }
 
 async function confirmRotate(id) {
-  openConfirmModal('Rotate Link', 'A new link is generated and the current one stops working immediately. Entities, expiry, PIN and history are kept — a guest with a PIN will be asked for it again.', async () => {
+  openConfirmModal('Rotate Link', 'A new link is generated and the current one stops working immediately. Entities, expiry, PIN and history are kept — a guest with a PIN will be asked for it again, and links without PIN are retired.', async () => {
     const r = await fetch(`${BASE}/admin/tokens/${id}/rotate-slug`, { method: 'POST' });
     if (!r.ok) { showToast('Failed to rotate link', 'error'); return; }
     const token = await r.json();
@@ -1578,8 +1779,11 @@ function fallbackCopy(text) {
 }
 
 // ── QR Code ───────────────────────────────────────────────────────────
-function showQr(url) {
+function showQr(url, note = '') {
   // The guest link itself, openable in a new tab to check what a guest sees.
+  const noteEl = document.getElementById('qr-note');
+  noteEl.textContent = note;
+  noteEl.classList.toggle('hidden', !note);
   const urlEl = document.getElementById('qr-url');
   urlEl.textContent = url;
   urlEl.href = url;
@@ -1704,6 +1908,14 @@ document.addEventListener('click', e => {
     case 'open-pin-modal': openPinModal(el.dataset.id, el.dataset.label); break;
     case 'submit-pin': submitPin(); break;
 
+    // Links without PIN
+    case 'copy-link-without-pin': copyLinkWithoutPin(el.dataset.id); break;
+    case 'qr-without-pin': qrWithoutPin(el.dataset.id); break;
+    case 'create-access-link': createAccessLink(); break;
+    case 'show-access-link-qr': showAccessLinkQr(el.dataset.url); break;
+    case 'confirm-rotate-access-link': confirmRotateAccessLink(el.dataset.codeId); break;
+    case 'confirm-revoke-access-link': confirmRevokeAccessLink(el.dataset.codeId); break;
+
     // Extend modal
     case 'open-extend-modal': openExtendModal(el.dataset.id, el.dataset.label, el.dataset.status); break;
     case 'submit-extend': submitExtend(); break;
@@ -1765,6 +1977,7 @@ document.addEventListener('change', e => {
   if (e.target.dataset.action === 'toggle-custom-expiry') {
     toggleCustomExpiry(e.target.dataset.prefix);
   }
+  if (e.target.id === 'pin-remember-field') saveRememberPin(e.target.checked);
 });
 
 document.addEventListener('input', e => {

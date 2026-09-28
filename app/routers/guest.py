@@ -240,6 +240,24 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _from_home_network(request: Request) -> bool:
+    """Whether this request comes from the home network, by its whole path.
+
+    _client_ip() alone is not enough here: it is the first X-Forwarded-For
+    entry, which the client writes. See local_network.chain_is_local for why
+    every hop is checked. Every X-Forwarded-For header is read, not only the
+    first, so a proxy that adds its own header line beside a forged one is
+    still seen.
+    """
+    hops = [
+        hop.strip()
+        for header in request.headers.getlist("X-Forwarded-For")
+        for hop in header.split(",")
+    ]
+    hops.append(request.client.host if request.client else "unknown")
+    return local_network.chain_is_local(hops)
+
+
 def _enforce_ip_allowlist(row, request: Request) -> None:
     if not row["ip_allowlist"]:
         return
@@ -274,9 +292,11 @@ async def _enforce_country_allowlist(row, request: Request) -> None:
     raw = row["country_allowlist"]
     if not raw:
         return
-    client_ip = _client_ip(request)
-    if local_network.contains(client_ip):
+    # The whole forwarding chain, not the first entry: a forged
+    # "X-Forwarded-For: 192.168.1.20" must not skip the lookup entirely.
+    if _from_home_network(request):
         return
+    client_ip = _client_ip(request)
     allowed: list[str] = json.loads(raw)
     country = await geoip.country_for(client_ip)
     if country is None or country not in allowed:
@@ -717,7 +737,7 @@ async def _enforce_local_network(row, body: CommandRequest, request: Request) ->
     gated = await db.get_local_network_entity_ids(row["id"])
     if body.entity_id not in gated:
         return
-    if not local_network.contains(_client_ip(request)):
+    if not _from_home_network(request):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This control only works when you are on the home network",

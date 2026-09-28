@@ -414,9 +414,12 @@ proximity requirement: the add-on option says what the home network is, and
 each link says which controls need it — including ones a domain list would miss,
 like an alarm panel's disarm.
 
-The check uses the same client address as the IP allowlist, so the same caveat
-applies: it needs a reverse proxy that overwrites `X-Forwarded-For` with the real
-client address. Two setups need thought:
+The check does not take `X-Forwarded-For` on trust. Every address in the header,
+and the address the connection actually came from, has to be inside the ranges
+or in private address space (a reverse proxy on the LAN, a Docker bridge). So a
+request from outside cannot pass by writing a LAN address into the header,
+whether or not a proxy sits in front and whether that proxy overwrites the
+header or appends to it. Two setups need thought:
 
 - **Tunnels and public URLs.** A guest on your Wi-Fi who opens the public link
   (a Cloudflare Tunnel, Nabu Casa, or hairpin NAT) usually reaches HomePass from
@@ -464,8 +467,9 @@ address; without one, a client can claim any address it likes.
 An optional comma-separated list of ISO country codes (`GB, IE`), set when the
 link is created. The whole link — page, state, stream, commands, cameras, the
 PIN and claim forms — then only opens from addresses registered to one of those
-countries. Addresses inside **Home Network Ranges** always pass, since a LAN
-address has no country; any other address the database cannot place is refused,
+countries. Requests from inside **Home Network Ranges** always pass, since a LAN
+address has no country — judged the same way as home-network-only controls, so a
+forged `X-Forwarded-For` does not earn the exemption; any other address the database cannot place is refused,
 and so is everything if no database is installed. Codes are checked against the
 installed database when the link is created, so a typo like `UK` (for `GB`) is
 rejected rather than locking every guest out. It applies alongside the IP

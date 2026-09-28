@@ -194,8 +194,10 @@ async def test_stream_gate_matches(geo_db, test_db):
     from app.routers.guest import _validate_token
 
     await _make_token("geo")
+    from starlette.datastructures import Headers
+
     def req(ip):
-        return SimpleNamespace(headers=_from(ip), cookies={}, client=SimpleNamespace(host=ip))
+        return SimpleNamespace(headers=Headers(_from(ip)), cookies={}, client=SimpleNamespace(host=ip))
     assert await _validate_token("geo", req(GB_IP), allow_pending=True)
     with pytest.raises(HTTPException) as exc:
         await _validate_token("geo", req(US_IP), allow_pending=True)

@@ -147,7 +147,7 @@ Any controllable entity can be marked **Require the guest to be at the property*
 
 Set **Home Network Ranges** in the add-on options, and any controllable entity can be marked **Only from the home network**. The guest still sees the control and its state wherever they are, but pressing it only works when they are connected to one of those ranges — your Wi-Fi, typically. Locks, covers and buttons are ticked for you when you add them to a link; untick one for a guest you trust to use it from anywhere.
 
-- **It relies on the address your reverse proxy reports**, the same as the IP allowlist.
+- **It checks the whole route a request took**, not only the address it claims: every forwarding hop has to be on your ranges or in private address space, so a request from outside cannot fake a home address.
 - **If guests use a public link at home**, through a tunnel or Nabu Casa, their requests may arrive from your public IP rather than a home address. Add your public IP to the ranges in that case.
 - **Clearing the option turns the check off** for every link, including entities already marked.
 

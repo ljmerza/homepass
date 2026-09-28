@@ -32,6 +32,7 @@ installs, just a link.
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
+- **Entity suggestions** — opt-in "Doors & locks" and "Lights" chips that pre-fill a new link's selection for review
 - **Slug rotation** — mint a new link for an existing token and retire the old one
 - **Real-time updates** — SSE-powered live state changes with automatic reconnect
 - **Installable PWA** — guests can add it to their home screen for an app-like experience

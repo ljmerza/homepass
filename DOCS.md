@@ -59,6 +59,8 @@ Three ways to narrow the list, and they combine:
 
 If the label row is missing, HomePass could not read the label registry from Home Assistant. Everything else still works.
 
+**Suggest** (new links only) offers two starting points: **Doors & locks** adds every lock, plus covers that Home Assistant classes as a door, gate or garage door and covers or buttons whose name says door, gate or garage. **Lights** adds every light, plus switches named as a light or lamp. Nothing is picked until you press one, pressing one only adds to the selection, and names are matched as whole words, so "Outdoor Blinds" is not a door. Check what was added before you create the link.
+
 **Templates** save the current selection under a name so a later link can start from it. Loading a template adds to whatever is already selected, so two templates can be stacked; entities Home Assistant no longer has are dropped quietly.
 
 ### Per-entity options

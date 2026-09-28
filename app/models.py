@@ -49,6 +49,33 @@ SUPPORTED_DOMAINS: set[str] = set(ALLOWED_SERVICES) | READ_ONLY_DOMAINS
 # Keys that could bypass the entity allowlist if forwarded to HA
 FORBIDDEN_DATA_KEYS = {"entity_id", "device_id", "area_id", "floor_id", "label_id"}
 
+# "Suggest" in the create-token picker: a starting selection for the two things
+# guests are most often given, a way in and the lights. Suggestions only ever
+# add to the picker's selection, which the admin still reviews and saves — they
+# grant nothing on their own, and they never reach outside SUPPORTED_DOMAINS.
+#
+# Deliberately narrow. Keywords are matched against whole words of the entity
+# ID and friendly name, never substrings: "door" must not pull in
+# cover.outdoor_blinds, "gate" must not match "navigate", and "light" must not
+# match sensor-ish names like "daylight". Spanish terms are included because
+# the fork this was ported from was built for Spanish-speaking households.
+SUGGESTION_CATEGORIES: tuple[str, ...] = ("access", "lights")
+ACCESS_KEYWORDS: frozenset[str] = frozenset({
+    "door", "doors", "gate", "gates", "garage", "entrance", "deadbolt",
+    "puerta", "portal", "garaje", "verja", "cancela", "cerradura",
+})
+LIGHT_KEYWORDS: frozenset[str] = frozenset({
+    "light", "lights", "lamp", "lamps", "luz", "luces", "lampara",
+})
+# A lock is access by definition, so every lock is suggested. A cover is only
+# access when HA says it is a door, gate or garage door (blinds and shades are
+# covers too) or its name says so; a button only when its name does.
+ACCESS_COVER_DEVICE_CLASSES: frozenset[str] = frozenset({"door", "garage", "gate"})
+ACCESS_KEYWORD_DOMAINS: frozenset[str] = frozenset({"cover", "button", "input_button"})
+# Every light is a light. A switch is only when its name says so — most smart
+# plugs that drive a lamp are called something like "Bedside Lamp".
+LIGHT_KEYWORD_DOMAINS: frozenset[str] = frozenset({"switch"})
+
 
 class AdminLoginRequest(BaseModel):
     username: str

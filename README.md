@@ -42,6 +42,7 @@ installs, just a link.
 - **Real-time updates** — SSE-powered live state changes with automatic reconnect
 - **Installable PWA** — guests can add it to their home screen for an app-like experience
 - **Dark mode** — system-aware with manual override
+- **Languages** — guest pages in all 24 official EU languages, picked from the guest's browser; the admin dashboard in English or Spanish, auto-detected or pinned per browser
 - **Admin dashboard** — create, revoke, extend, and monitor tokens
 - **Live settings** — change the app name, contact message, Guest URL, colours and log retention from the dashboard, no restart
 - **Recent activity** — see guest link opens and commands in the admin dashboard
@@ -210,6 +211,31 @@ actions:
         {{ trigger.event.data.service }}
         on {{ trigger.event.data.target_entity_id }}
 ```
+
+## Languages
+
+Guest links — the app itself and the expired, PIN, device-claim and "in use on
+another device" pages — follow the language the guest's browser asks for, in
+any of the 24 official EU languages (bg, cs, da, de, el, en, es, et, fi, fr, ga,
+hr, hu, it, lt, lv, mt, nl, pl, pt, ro, sk, sl, sv). Anything else gets English.
+There is no language switch on the guest side: the browser is the one thing the
+page knows about its reader.
+
+The admin dashboard speaks English and Spanish. It follows the browser too, and
+**Settings → Language** pins one for that browser (a cookie scoped to the
+dashboard; **Automatic** clears it).
+
+What is translated is HomePass's own text. The names you give — the app name,
+the contact message, token labels, per-entity display names — are shown as you
+wrote them, and so are Home Assistant's own entity names and select options.
+Error details from the API stay in English; the guest page translates the
+refusals it shows to a guest.
+
+Strings live in `app/locales/<guest|admin>/<lang>.json`, one flat file per
+language with English as the reference; `tests/test_i18n.py` fails if any
+catalogue's keys, placeholders or plural forms drift from English's. Everything
+beyond English and Spanish was machine translated and has not been reviewed by
+native speakers — corrections are welcome.
 
 ## Supported Entity Types
 

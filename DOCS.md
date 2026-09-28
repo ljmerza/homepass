@@ -201,6 +201,10 @@ Anything that sets an expiry takes either `expires_at` (Unix seconds — handy f
 
 With the API enabled, the dashboard header gets an **API Docs** link to an interactive Swagger page at `/api/docs`. The page and the schema at `/api/openapi.json` need a dashboard login (the schema also accepts the API key). The API is limited to 120 requests a minute per client IP.
 
+## Languages
+
+Guest links show in the guest's own browser language when it is one of the 24 official EU languages, and in English otherwise. The admin dashboard is in English or Spanish: it follows your browser, and **Settings → Language** pins one for the browser you are using. The app name, contact message, token labels and display names you set are shown exactly as you typed them, in every language.
+
 ## Notifications
 
 HomePass fires a `homepass_activity` event on Home Assistant's event bus when a guest link is opened and when a guest command succeeds, and writes a matching Logbook entry. Trigger an automation on that event to get a phone notification when the cleaner unlocks the door. The event carries the link's label, the entity and the service — never the slug or the guest's IP address. The README has a worked automation.

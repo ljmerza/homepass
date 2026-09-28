@@ -147,6 +147,18 @@ async def create_token(
     return await get_token_by_id(token_id)  # type: ignore[return-value]
 
 
+async def any_country_allowlist() -> bool:
+    """Whether any live token restricts by country — i.e. whether the GeoIP
+    table will be needed. Revoked and expired tokens cannot reach the check."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM tokens WHERE country_allowlist IS NOT NULL "
+        "AND revoked = 0 AND expires_at > ? LIMIT 1",
+        (int(time.time()),),
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
 async def get_token_by_slug(slug: str) -> aiosqlite.Row | None:
     db = await get_db()
     async with db.execute("SELECT * FROM tokens WHERE slug = ?", (slug,)) as cur:

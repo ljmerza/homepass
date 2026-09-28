@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # string rather than list[str] because pydantic-settings would demand JSON
     # for a list, and the add-on option is typed by a person.
     local_network_cidrs: str = ""
+    # The offline IP-to-country database behind per-token country allowlists.
+    # The image bakes one in at build time (see the Dockerfile); a missing file
+    # is not an error, it only means no link can be given a country allowlist.
+    geoip_db_path: str = "/app/geoip/dbip-country-lite.csv.gz"
 
     @model_validator(mode="after")
     def _require_credentials_in_standalone(self):

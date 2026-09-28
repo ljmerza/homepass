@@ -123,11 +123,13 @@ Each token's card offers:
 - **Add PIN / PIN Protected** — set, change or remove the PIN.
 - **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, and a device lock is released.
 - **Lock to One Device / Unbind Device** — lock the link to the first browser that claims it, or release the claim so the next device can take it.
-- **Duplicate** — start a new link pre-filled with this one's entities and IP allowlist.
+- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist, country allowlist and device-lock setting.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 
 **IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It only means anything if HomePass sits behind a reverse proxy that overwrites the client address; on a bare LAN setup it is easy to bypass. To change it later, duplicate the link and revoke the old one.
+
+**Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
 
 **Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
 

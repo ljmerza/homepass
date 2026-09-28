@@ -213,6 +213,12 @@
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <div>
+        <label for="f-countries" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Countries <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <input id="f-countries" type="text" placeholder="{{ 'GB, IE' if geoip_available else 'GeoIP database not installed' }}" {{ '' if geoip_available else 'disabled' }}
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono uppercase outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+        <p class="text-xs text-muted mt-1">Comma-separated ISO country codes. The link only opens from addresses registered to those countries, plus your home network. VPNs and roaming can move a guest across a border. <a class="underline" href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a>.</p>
+      </div>
+      <div>
         <label for="f-pin" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">PIN <span class="text-muted/60 normal-case tracking-normal">(optional, 4-8 digits)</span></label>
         <input id="f-pin" type="text" inputmode="numeric" maxlength="8" placeholder="Leave blank for no PIN"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
@@ -754,6 +760,10 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-base">lan</span>
             <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : 'Any IP'}</span>
           </div>
+          ${t.country_allowlist ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">public</span>
+            <span>${esc(t.country_allowlist.join(', '))}</span>
+          </div>` : ''}
           ${t.device_binding ? `<div class="flex items-center gap-2 ${t.device_bound_at ? 'text-ink' : 'text-muted'}">
             <span aria-hidden="true" class="material-symbols-outlined text-base">${t.device_bound_at ? 'phonelink_lock' : 'smartphone'}</span>
             <span>${t.device_bound_at ? `Device bound ${relativeTime(t.device_bound_at)}` : 'Awaiting first device'}</span>
@@ -1184,6 +1194,7 @@ function openCreateModal(preset = {}) {
   document.getElementById('f-label').value = preset.label || '';
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
+  document.getElementById('f-countries').value = (preset.countryAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
   // A duplicate keeps the lock setting but never the claim: the copy is for a
   // different guest, whose device has not claimed anything yet.
@@ -1211,6 +1222,9 @@ async function submitCreate() {
   const expiresIn = getExpirySeconds('f');
   const ipRaw = document.getElementById('f-ip').value.trim();
   const ipList = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
+  const countryRaw = document.getElementById('f-countries').value.trim();
+  const countryList = countryRaw
+    ? countryRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : null;
   const errEl = document.getElementById('create-error');
 
   const pin = document.getElementById('f-pin').value.trim() || null;
@@ -1229,6 +1243,7 @@ async function submitCreate() {
     expires_in_seconds: expiresIn,
     starts_at: startsAt,
     ip_allowlist: ipList,
+    country_allowlist: countryList,
     pin,
     device_binding: document.getElementById('f-device-binding').checked,
   };
@@ -1263,6 +1278,7 @@ async function duplicateToken(tokenId) {
     entityIds: token.entity_ids || [],
     ipAllowlist: token.ip_allowlist || [],
     deviceBinding: token.device_binding,
+    countryAllowlist: token.country_allowlist || [],
     expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
   });
 }

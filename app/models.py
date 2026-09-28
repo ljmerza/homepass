@@ -145,6 +145,10 @@ class TokenCreateRequest(BaseModel):
     pin: str | None = None
     # Lock the link to the first browser that claims it. Off by default.
     device_binding: bool = False
+    # ISO 3166-1 alpha-2 codes. Validated and upper-cased in the router, which
+    # checks them against the GeoIP database actually installed — a code that
+    # database has no addresses for would lock every guest out.
+    country_allowlist: list[str] | None = None
 
 
 class TokenDeviceBindingRequest(BaseModel):

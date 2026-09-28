@@ -43,6 +43,7 @@ installs, just a link.
 - **Service allowlist** — only the services a domain's guest controls actually call are permitted
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
 - **IP allowlisting** — optionally restrict tokens to specific CIDRs
+- **Country allowlisting** — optionally restrict a link to visitors from chosen countries, using an offline GeoIP database
 
 ## Installation
 
@@ -136,6 +137,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
 | `LOCAL_NETWORK_CIDRS` | Comma-separated CIDRs that count as the home network | No | — |
+| `GEOIP_DB_PATH` | IP-to-country CSV for country allowlists (see below) | No | `/app/geoip/dbip-country-lite.csv.gz` |
 
 ## Home Assistant Activity Events
 
@@ -364,6 +366,35 @@ grants `light.turn_on`. They decide what the guest UI draws.
 An optional comma-separated list of CIDRs, set when the link is created. It
 requires a reverse proxy that overwrites `X-Forwarded-For` with the real client
 address; without one, a client can claim any address it likes.
+
+### Country allowlist
+
+An optional comma-separated list of ISO country codes (`GB, IE`), set when the
+link is created. The whole link — page, state, stream, commands, cameras, the
+PIN and claim forms — then only opens from addresses registered to one of those
+countries. Addresses inside **Home Network Ranges** always pass, since a LAN
+address has no country; any other address the database cannot place is refused,
+and so is everything if no database is installed. Codes are checked against the
+installed database when the link is created, so a typo like `UK` (for `GB`) is
+rejected rather than locking every guest out. It applies alongside the IP
+allowlist, and carries the same reverse-proxy requirement.
+
+It is coarse by nature: it says where an address is registered, not where the
+guest is. A VPN, a corporate network or a roaming SIM can put a guest in another
+country without their moving.
+
+The lookup is offline. The image downloads DB-IP's free **IP to Country Lite**
+database when it is built and reads it from disk, so guest addresses are never
+sent anywhere. That database is licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), which allows shipping
+it in the image with attribution: [IP Geolocation by DB-IP](https://db-ip.com).
+It is refreshed monthly upstream and each image carries the copy current at its
+build, so accuracy slowly drifts until the next release. For Docker installs,
+`GEOIP_DB_PATH` can point at a newer file in the same layout
+(`first_ip,last_ip,country_code` CSV, optionally gzipped). The table is loaded
+in the background at startup when a live link has a country allowlist, or on
+first use otherwise — a second or two of parsing, longer on a Raspberry Pi, and
+roughly 10 MB of memory. Installs with no country-restricted link never load it.
 
 ## Limits
 

@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import database as db
+from app import geoip
 from app import ha_client
 from app import local_network
 from app.config import settings
@@ -62,6 +63,13 @@ async def lifespan(app: FastAPI):
 
     await ha_client.start_ws_listener()
 
+    # Parse the GeoIP table in the background when a live link will need it,
+    # so the first country-gated guest request does not wait on a cold load.
+    # Installs with no country allowlist never load it at all.
+    geoip_warm = None
+    if geoip.available() and await db.any_country_allowlist():
+        geoip_warm = asyncio.create_task(geoip.get_table())
+
     async def _cleanup_loop():
         while True:
             await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
@@ -79,6 +87,8 @@ async def lifespan(app: FastAPI):
 
     # M-7: Shutdown with timeout
     cleanup_task.cancel()
+    if geoip_warm is not None:
+        geoip_warm.cancel()
     try:
         await asyncio.wait_for(ha_client.stop_ws_listener(), timeout=5)
     except asyncio.TimeoutError:
@@ -160,6 +170,7 @@ async def admin_dashboard_page(request: Request):
         # network to check against; the ranges are shown beside it so the admin
         # can see what the flag will actually compare with.
         "local_networks": [str(n) for n in local_network.networks()],
+        "geoip_available": geoip.available(),
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 

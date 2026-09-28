@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import device_binding
+from app import geoip
 from app import guest_pin
 from app import ha_client
 from app import local_network
@@ -237,6 +238,36 @@ def _enforce_ip_allowlist(row, request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed")
 
 
+async def _enforce_country_allowlist(row, request: Request) -> None:
+    """Refuse a request whose address the GeoIP database does not place in one
+    of the token's countries.
+
+    Sits beside the IP allowlist and is enforced everywhere that is: every
+    guest route, the page, the PIN form and the claim. Both apply when a token
+    has both.
+
+    The home network passes. A LAN address has no country to look up, and a
+    guest on the house Wi-Fi opening the link directly is the last person this
+    is meant to stop; the local_network_cidrs option is what says which
+    addresses those are, so an install that has not set it gets no exemption.
+
+    Fails closed: an address with no country (private space other than the home
+    network, unassigned blocks, "unknown") is refused, and so is every address
+    when no database is installed — an allowlist that opens when it cannot
+    check is not an allowlist.
+    """
+    raw = row["country_allowlist"]
+    if not raw:
+        return
+    client_ip = _client_ip(request)
+    if local_network.contains(client_ip):
+        return
+    allowed: list[str] = json.loads(raw)
+    country = await geoip.country_for(client_ip)
+    if country is None or country not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Country not allowed")
+
+
 def _pin_gate_ok(row, request: Request) -> bool:
     """True if this token carries no PIN, or this request already proved it.
 
@@ -398,6 +429,7 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
     _enforce_ip_allowlist(row, request)
+    await _enforce_country_allowlist(row, request)
 
     if not _pin_gate_ok(row, request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN required")
@@ -642,6 +674,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
 
     try:
         _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
@@ -770,6 +803,7 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
 
     try:
         _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
@@ -836,6 +870,7 @@ async def guest_pin_submit(
 
     try:
         _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})

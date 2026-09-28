@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from app import database as db
 from app.auth import INGRESS_SENTINEL, SESSION_COOKIE, require_admin, verify_password
 from app.config import settings
+from app import geoip
 from app import guest_pin
 from app import ha_client
 from app.models import (
@@ -140,6 +141,7 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
                      entity_meta: dict[str, dict[str, Any]] | None = None) -> dict:
     ip_raw = row["ip_allowlist"]
     ip_list = json.loads(ip_raw) if ip_raw else None
+    country_raw = row["country_allowlist"]
     if entity_ids is not None:
         count = len(entity_ids)
     elif "entity_count" in row.keys():
@@ -159,6 +161,7 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
         "revoked": bool(row["revoked"]),
         "last_accessed": row["last_accessed"],
         "ip_allowlist": ip_list,
+        "country_allowlist": json.loads(country_raw) if country_raw else None,
         "entity_count": count,
         "entity_ids": entity_ids,
         "entity_meta": entity_meta,
@@ -216,6 +219,8 @@ async def create_token(
                     detail=f"Invalid CIDR: {cidr}",
                 )
 
+    countries = await _clean_country_allowlist(body.country_allowlist)
+
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
     expires_at = _expires_at_from(body.expires_in_seconds, starts_at)
@@ -238,9 +243,39 @@ async def create_token(
         pin_hash=await _hash_pin_or_none(body.pin),
         starts_at=starts_at,
         device_binding=body.device_binding,
+        country_allowlist=countries,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
+
+
+async def _clean_country_allowlist(codes: list[str] | None) -> list[str] | None:
+    """Upper-case, de-duplicate and check a country allowlist. Empty means none.
+
+    Checked against the countries the installed GeoIP database actually has
+    addresses for, not a static ISO list: "UK" is a plausible typo for "GB",
+    and a code the database never returns would refuse every guest, silently,
+    on a link that looked fine. No database at all is refused for the same
+    reason — the link could never be opened from outside the home network.
+    """
+    if not codes:
+        return None
+    cleaned = list(dict.fromkeys(c.strip().upper() for c in codes if c and c.strip()))
+    if not cleaned:
+        return None
+    known = await geoip.known_countries()
+    if known is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Country allowlists need the GeoIP database, which is not installed",
+        )
+    unknown = [c for c in cleaned if c not in known]
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown country code: {', '.join(unknown)} (use ISO codes such as GB, US)",
+        )
+    return cleaned
 
 
 async def _hash_pin_or_none(value: Any) -> str | None:

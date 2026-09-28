@@ -17,6 +17,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN mkdir -p static/icons && python generate_icons.py
+
+# Offline IP-to-country database for per-token country allowlists: DB-IP's
+# "IP to Country Lite", CC BY 4.0 (attribution: https://db-ip.com). It is
+# published monthly, so a build early in a month may find only last month's
+# file. A failed download fails the build rather than shipping an image that
+# would refuse every guest on a link with a country allowlist.
+RUN mkdir -p geoip \
+    && for m in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)"; do \
+         curl -fsSL -o geoip/dbip-country-lite.csv.gz \
+           "https://download.db-ip.com/free/dbip-country-lite-${m}.csv.gz" && break; \
+       done \
+    && test -s geoip/dbip-country-lite.csv.gz
 RUN tailwindcss -i static/input.css -o static/dist.css --minify
 
 ARG GIT_SHA=dev
@@ -39,6 +51,7 @@ COPY --from=builder /build/alembic.ini .
 COPY --from=builder /build/migrations ./migrations
 COPY --from=builder /build/templates ./templates
 COPY --from=builder /build/static ./static
+COPY --from=builder /build/geoip ./geoip
 COPY --from=builder /build/run.sh .
 RUN chmod +x run.sh
 

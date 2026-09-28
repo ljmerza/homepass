@@ -1708,7 +1708,15 @@ document.getElementById('s-timing').innerHTML = timingFormHtml('s');
 
 // ── Create Token Modal ────────────────────────────────────────────────
 function openCreateModal(preset = {}) {
-  createPicker = { selected: new Set(preset.entityIds || []), filter: 'all', label: '', search: '', meta: {} };
+  // A duplicate's per-entity overrides come along with its entities. They hold
+  // the proximity and home-network requirements, which are access controls:
+  // a copy that dropped them would be a looser link than the one it was made
+  // from, with nothing on the form to say so. Copied, so editing the copy's
+  // picker never reaches back into the source token's object.
+  createPicker = {
+    selected: new Set(preset.entityIds || []), filter: 'all', label: '', search: '',
+    meta: JSON.parse(JSON.stringify(preset.entityMeta || {})),
+  };
   document.getElementById('create-modal-title').textContent = preset.title || tr('create.title');
   document.getElementById('f-label').value = preset.label || '';
   document.getElementById('f-slug').value = '';
@@ -1791,6 +1799,7 @@ async function duplicateToken(tokenId) {
     title: tr('duplicate.title'),
     label: tr('duplicate.label', { label: token.label }),
     entityIds: token.entity_ids || [],
+    entityMeta: token.entity_meta || {},
     ipAllowlist: token.ip_allowlist || [],
     timing: timingPresetFromToken(token, Date.now(), true),
     rememberPin: token.remember_pin,

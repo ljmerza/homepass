@@ -116,3 +116,34 @@ async def test_remember_toggle_is_reverted_when_the_save_fails(
     assert out["call"]["method"] == "PATCH"
     assert out["call"]["body"] == {"remember_pin": False}
     assert out["checked"] is True
+
+
+async def test_duplicate_keeps_the_per_entity_gates(client, admin_session, mock_ha_client):
+    """A dashboard copy carries the source's proximity and home-network flags
+    into the create request, as the API's duplicate does — a copy must not be
+    a looser link than its source."""
+    out = await _run(client, admin_session, _FETCH_RECORDER + """
+    allEntities = [
+      { entity_id: 'lock.front', friendly_name: 'Front', domain: 'lock', state: 'locked' },
+      { entity_id: 'light.a', friendly_name: 'A', domain: 'light', state: 'on' },
+    ];
+    const sourceMeta = {
+      'lock.front': { display_name: 'Door', options: {}, require_proximity: true, require_local_network: true },
+      'light.a': { display_name: null, options: {}, require_proximity: false, require_local_network: false },
+    };
+    replies.push({ ok: true, body: {
+      id: 't1', label: 'Stay', entity_ids: ['lock.front', 'light.a'], entity_meta: sourceMeta,
+      ip_allowlist: null, created_at: 1700000000, starts_at: null, expires_at: 1700086400,
+      max_uses: null, access_windows: null, remember_pin: true,
+    } });
+    await duplicateToken('t1');
+    createPicker.meta['lock.front'].display_name = 'Changed on the copy';
+    replies.push({ ok: true, body: { slug: 'copy' } });
+    await submitCreate();
+    const create = calls.filter(c => c.url.endsWith('/admin/tokens') && c.method === 'POST').pop();
+    console.log(JSON.stringify({ meta: create.body.entity_meta, source: sourceMeta['lock.front'].display_name }));
+    """)
+    assert out["meta"]["lock.front"]["require_proximity"] is True
+    assert out["meta"]["lock.front"]["require_local_network"] is True
+    # The copy's picker holds its own object, not the source token's.
+    assert out["source"] == "Door"

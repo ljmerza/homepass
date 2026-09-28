@@ -166,7 +166,7 @@ Each token's card offers:
 - **Copy link without PIN / QR without PIN** — on PIN-protected links only; see above.
 - **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, links without PIN are retired, and a device lock is released.
 - **Lock to One Device / Unbind Device** — lock the link to the first browser that claims it, or release the claim so the next device can take it.
-- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist, country allowlist, device-lock and remember-PIN settings, and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
+- **Duplicate** — start a new link pre-filled with this one's entities and their settings (display names, location and home-network requirements), IP allowlist, country allowlist, device-lock and remember-PIN settings, and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 

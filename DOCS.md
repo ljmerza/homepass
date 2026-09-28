@@ -81,6 +81,15 @@ Two things to know:
 
 Guessing is rate-limited, so a PIN entered wrongly several times in a row starts being refused for a minute at a time. Wait and try again.
 
+## Locking a link to one device
+
+Tick **Lock to one device** when creating a link, or use **Lock to One Device** on its card later. The guest sees a short "Use this device?" screen the first time; after they tap it, the link only works in that browser. Anyone else who opens it — a friend it was forwarded to, the guest's second phone — gets a page saying the link is in use on another device.
+
+- **Sharing the link in a chat app does not use it up.** The app's preview fetch only sees the "Use this device?" screen, which says nothing about your home. The link is claimed only when someone taps the button.
+- **It is tied to the browser, not the phone.** Some chat apps (Instagram, Facebook and others) open links in their own built-in browser, which counts as a different device. So does switching from Safari to Chrome, clearing cookies, and possibly adding the page to an iPhone home screen. The screens tell the guest to open the link in their normal browser first.
+- **Unbind Device** on the card lets the next device claim the link, which is the fix when a guest is locked out of their own link. **Rotate Link** also releases the claim, and gives the link to a new person.
+- Claims and refusals show up in **Recent activity**, so you can see when a link has reached a second device.
+
 ## Requiring the guest to be at the property
 
 Any controllable entity can be marked **Require the guest to be at the property**. When the guest presses that one control, their browser is asked where it is, and the command only goes through if the position falls inside Home Assistant's `zone.home`. It is per entity — you can gate the gate release and leave the living-room lamp alone.
@@ -102,7 +111,8 @@ Each token's card offers:
 - **Extend** — push the expiry out. It reads **Renew** on a link that has already expired or been revoked.
 - **Edit Entities** — change what is on the link, including the per-entity options.
 - **Add PIN / PIN Protected** — set, change or remove the PIN.
-- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again.
+- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, and a device lock is released.
+- **Lock to One Device / Unbind Device** — lock the link to the first browser that claims it, or release the claim so the next device can take it.
 - **Duplicate** — start a new link pre-filled with this one's entities and IP allowlist.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.

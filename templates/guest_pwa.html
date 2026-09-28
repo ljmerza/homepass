@@ -323,6 +323,7 @@ async function init() {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (!r.ok) throw new Error('Failed to load');
     const data = await r.json();
     states = data.states;
@@ -421,6 +422,7 @@ function activatePending() {
 function connectPendingSSE() {
   pendingEventSource = new EventSource(`${BASE}/g/${SLUG}/stream`);
   pendingEventSource.addEventListener('token_activated', activatePending);
+  pendingEventSource.addEventListener('device_unbound', reloadForDevice);
   pendingEventSource.addEventListener('token_expired', () => {
     pendingEventSource.close();
     pendingEventSource = null;
@@ -462,6 +464,8 @@ function connectSSE() {
     showExpired();
   });
 
+  eventSource.addEventListener('device_unbound', reloadForDevice);
+
   eventSource.onerror = () => {
     badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-primary/10 text-primary';
     dot.className = 'w-1.5 h-1.5 rounded-full bg-current';
@@ -477,6 +481,7 @@ async function refetchState() {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (!r.ok) return;
     const data = await r.json();
     states = data.states;
@@ -490,6 +495,25 @@ async function refetchState() {
 function showPinEntry() {
   if (eventSource) { eventSource.close(); eventSource = null; }
   location.reload();
+}
+
+// This device no longer holds a device-bound link: the admin reset the lock,
+// turned it on or off, or the cookie is gone. Same move as the PIN case —
+// reload, and the server serves whichever of the claim screen, the refusal
+// page or the live page now applies. The page has no copy of either screen.
+function reloadForDevice() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  if (pendingEventSource) { pendingEventSource.close(); pendingEventSource = null; }
+  location.reload();
+}
+
+// A 403 from the device gate carries {detail: {device: true}}; every other 403
+// (the IP allowlist, a proximity refusal) does not. Read from a clone so a
+// caller that goes on to read the body itself still can.
+async function isDeviceRefusal(r) {
+  if (r.status !== 403) return false;
+  const err = await r.clone().json().catch(() => ({}));
+  return Boolean(err.detail && err.detail.device);
 }
 
 function showExpired() {
@@ -1533,6 +1557,7 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
     });
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (gated && !r.ok) {
       // A gated control's refusal carries a reason worth repeating — "you need
       // to be at the property", "your location is out of date". Every other

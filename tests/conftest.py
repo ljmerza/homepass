@@ -85,6 +85,7 @@ def mock_ha_client():
         "logbook_log": AsyncMock(return_value={}),
         "broadcast_token_expired": AsyncMock(),
         "broadcast_token_activated": AsyncMock(),
+        "broadcast_device_unbound": AsyncMock(),
         "invalidate_entity_cache": AsyncMock(),
         "camera_snapshot": AsyncMock(return_value=(b"\xff\xd8fake-jpeg", "image/jpeg")),
         "camera_stream": _fake_camera_stream,

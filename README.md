@@ -28,6 +28,7 @@ installs, just a link.
 - **Time-limited access** — tokens expire after a chosen duration, or never
 - **Scheduled start** — an optional "valid from" time; the expiry is measured from the start, not from creation
 - **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint
+- **Single-device lock** — optionally lock a link to the first browser that claims it; other devices are refused
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
@@ -251,6 +252,37 @@ one; it can never show you what it is. **A forgotten PIN is replaced, not
 recovered** — set a new one. Setting or clearing a PIN signs out every guest who
 had already entered the old one.
 
+### Single-device lock
+
+Optional and off by default, set when the link is created or later with **Lock
+to One Device** on its card. The link then belongs to the first browser that
+taps **Use this device** on it; every other device gets a "link in use on
+another device" page, and every guest endpoint — the page, the state feed, the
+SSE stream, commands and both camera routes — refuses it.
+
+- **Opening the link never claims it.** Chat apps fetch a pasted link to build a
+  preview card, and a claim on page load would hand the link to that fetcher
+  before the guest ever tapped it. Claiming is a form POST from the claim
+  screen, which names neither the link nor anything on it.
+- **"One device" means one browser's cookies.** The claim is an `HttpOnly`,
+  `SameSite=Lax` cookie scoped to the link; only its SHA-256 is stored. A guest
+  who clears cookies, switches browsers, or claimed the link inside a chat app's
+  built-in browser (Instagram, Facebook and some others keep their own cookie
+  jar) is refused like a stranger. That is the tradeoff: HomePass does not guess
+  which of two browsers is "really" the guest, because any rule loose enough to
+  let the guest's other browser in lets a forwarded link in too. The claim screen
+  tells the guest to open the link in their normal browser first, the refusal
+  page says the same, and **Unbind Device** on the card lets the next device
+  claim it. On iOS a Home Screen web app may also keep cookies separate from
+  Safari, so a guest who adds the page to their home screen after claiming may
+  need an unbind.
+- **Rotate Link releases the claim**, since it hands the link to someone new.
+  Extending or renewing keeps it. Claims and refusals appear in Recent Activity.
+
+With a PIN as well, the PIN comes first: a second device learns nothing about
+the link, not even that it is claimed, until it has entered the PIN. A
+scheduled link can be claimed before it opens.
+
 ### Proximity requirement
 
 Per entity, off by default. With it on, pressing that one control asks the
@@ -329,6 +361,7 @@ Browser (Guest PWA)
     │
     ├── GET  /g/{slug}               → PWA shell (HTML), or the PIN screen
     ├── POST /g/{slug}/pin           → PIN entry
+    ├── POST /g/{slug}/bind          → claim a device-locked link
     ├── GET  /g/{slug}/manifest.json → PWA manifest
     ├── GET  /g/{slug}/state         → initial entity states
     ├── GET  /g/{slug}/stream        → SSE real-time updates

@@ -219,6 +219,13 @@
         <p class="text-xs text-muted mt-1">Guests must enter this before the link shows anything.</p>
       </div>
       <div>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input id="f-device-binding" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+          <span class="text-sm">Lock to one device</span>
+        </label>
+        <p class="text-xs text-muted mt-1 ml-6.5">The first browser to tap <span class="font-medium">Use this device</span> on the link keeps it; every other device is refused. A chat app's built-in browser counts as a separate device. Reset it from the token's card.</p>
+      </div>
+      <div>
         <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Entities</label>
         <div id="create-picker"></div>
       </div>
@@ -551,11 +558,18 @@ function renderActivity() {
   const visibleActivity = activityExpanded ? activity : activity.slice(0, ACTIVITY_COLLAPSED_COUNT);
   list.innerHTML = visibleActivity.map(a => {
     const isCommand = a.activity === 'command';
-    const icon = isCommand ? 'touch_app' : 'link';
     const tokenLabel = a.token_label || 'Deleted token';
+    // Device-lock events read as what happened to the link, not as an open:
+    // a refusal logged as "opened link" is how a link eaten by the wrong
+    // device used to look exactly like one nobody had tried.
+    const deviceTitles = {
+      device_bound: ['phonelink_lock', `${esc(tokenLabel)} claimed on a device`],
+      device_refused: ['block', `${esc(tokenLabel)} refused another device`],
+    };
+    const icon = isCommand ? 'touch_app' : (deviceTitles[a.activity] || ['link'])[0];
     const title = isCommand
       ? `${esc(tokenLabel)} used ${esc(a.service || 'command')}`
-      : `${esc(tokenLabel)} opened link`;
+      : (deviceTitles[a.activity] || [null, `${esc(tokenLabel)} opened link`])[1];
     const detail = isCommand && a.target_entity_id
       ? esc(a.target_entity_id)
       : (a.ip_address ? esc(a.ip_address) : 'Guest page');
@@ -728,6 +742,10 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-base">lan</span>
             <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : 'Any IP'}</span>
           </div>
+          ${t.device_binding ? `<div class="flex items-center gap-2 ${t.device_bound_at ? 'text-ink' : 'text-muted'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">${t.device_bound_at ? 'phonelink_lock' : 'smartphone'}</span>
+            <span>${t.device_bound_at ? `Device bound ${relativeTime(t.device_bound_at)}` : 'Awaiting first device'}</span>
+          </div>` : ''}
         </div>
 
         <div class="grid grid-cols-3 gap-2">
@@ -767,6 +785,16 @@ function renderTokens() {
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border transition-colors ${t.has_pin ? 'border-ink/30 text-ink bg-ink/10 hover:bg-ink/20' : 'border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5'}">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.has_pin ? 'lock' : 'lock_open'}</span> ${t.has_pin ? 'PIN Protected' : 'Add PIN'}
           </button>
+        </div>
+        <div class="grid ${t.device_binding ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-enabled="${t.device_binding ? 'true' : 'false'}" data-action="confirm-device-binding"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border transition-colors ${t.device_binding ? 'border-ink/30 text-ink bg-ink/10 hover:bg-ink/20' : 'border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.device_binding ? 'phonelink_lock' : 'smartphone'}</span> ${t.device_binding ? 'One Device Only' : 'Lock to One Device'}
+          </button>
+          ${t.device_binding ? `<button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-unbind" ${t.device_bound_at ? '' : 'disabled'}
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors disabled:opacity-40 disabled:pointer-events-none" title="Let the next device to open the link claim it">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">link_off</span> Unbind Device
+          </button>` : ''}
         </div>
         ${status === 'scheduled' ? `<div class="mt-2">
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-activate"
@@ -1120,6 +1148,9 @@ function openCreateModal(preset = {}) {
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
+  // A duplicate keeps the lock setting but never the claim: the copy is for a
+  // different guest, whose device has not claimed anything yet.
+  document.getElementById('f-device-binding').checked = Boolean(preset.deviceBinding);
   document.getElementById('f-expiry').value = preset.expiryValue || '86400';
   document.getElementById('create-error').textContent = '';
   document.getElementById('f-custom-expiry').classList.add('hidden');
@@ -1162,6 +1193,7 @@ async function submitCreate() {
     starts_at: startsAt,
     ip_allowlist: ipList,
     pin,
+    device_binding: document.getElementById('f-device-binding').checked,
   };
 
     const r = await fetch(`${BASE}/admin/tokens`, {
@@ -1193,6 +1225,7 @@ async function duplicateToken(tokenId) {
     label: `${token.label} copy`,
     entityIds: token.entity_ids || [],
     ipAllowlist: token.ip_allowlist || [],
+    deviceBinding: token.device_binding,
     expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
   });
 }
@@ -1438,6 +1471,37 @@ async function confirmRotate(id) {
     showToast('Link rotated — new link copied', 'success');
     copyUrl(guestLink(token.slug));
   });
+}
+
+function confirmDeviceBinding(id, label, enabled) {
+  const turningOn = !enabled;
+  openConfirmModal(
+    turningOn ? 'Lock to One Device' : 'Remove Device Lock',
+    turningOn
+      ? `"${label}" will only work on the first device that claims it. A guest already using the link is asked to claim it on their next load.`
+      : `"${label}" will work on any device holding the link again, and the current device claim is released.`,
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/device-binding`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ enabled: turningOn }),
+      });
+      if (r.ok) { showToast(turningOn ? 'Link locked to one device' : 'Device lock removed', 'success'); loadTokens(); }
+      else showToast('Error updating device lock', 'error');
+    },
+  );
+}
+
+function confirmUnbind(id, label) {
+  openConfirmModal(
+    'Unbind Device',
+    `The device holding "${label}" is disconnected, and the next device to open the link and tap "Use this device" claims it. To keep the link from the current holder altogether, use Rotate Link instead.`,
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/unbind`, { method: 'POST' });
+      if (r.ok) { showToast('Device unbound', 'success'); loadTokens(); loadActivity(); }
+      else showToast('Error unbinding device', 'error');
+    },
+  );
 }
 
 async function confirmDelete(id) {
@@ -1730,6 +1794,8 @@ document.addEventListener('click', e => {
     case 'confirm-revoke': confirmRevoke(el.dataset.id); break;
     case 'confirm-activate': confirmActivate(el.dataset.id, el.dataset.label); break;
     case 'confirm-rotate': confirmRotate(el.dataset.id); break;
+    case 'confirm-device-binding': confirmDeviceBinding(el.dataset.id, el.dataset.label, el.dataset.enabled === 'true'); break;
+    case 'confirm-unbind': confirmUnbind(el.dataset.id, el.dataset.label); break;
     case 'confirm-delete': confirmDelete(el.dataset.id); break;
 
     // Entity picker

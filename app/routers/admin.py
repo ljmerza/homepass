@@ -23,6 +23,7 @@ from app.models import (
     SUPPORTED_DOMAINS,
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
+    TokenDeviceBindingRequest,
     TokenPinRequest,
     TokenUpdateEntitiesRequest,
     TokenUpdateExpiryRequest,
@@ -164,6 +165,11 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
         # Whether, never what — the PIN is stored as a bcrypt hash and there is
         # no path that returns it or the hash to the dashboard.
         "has_pin": bool(row["pin_hash"]),
+        # Whether the link is locked to one device, and when that device
+        # claimed it (None while unclaimed). The claim's secret hash never
+        # leaves the server, for the same reason the PIN hash does not.
+        "device_binding": bool(row["device_binding"]),
+        "device_bound_at": row["device_bound_at"],
     }
 
 
@@ -231,6 +237,7 @@ async def create_token(
         entity_meta=_clean_entity_meta(body.entity_meta),
         pin_hash=await _hash_pin_or_none(body.pin),
         starts_at=starts_at,
+        device_binding=body.device_binding,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
@@ -405,6 +412,56 @@ async def update_token_pin(
     return {"has_pin": pin_hash is not None}
 
 
+@router.patch("/tokens/{token_id}/device-binding")
+async def update_device_binding(
+    token_id: str,
+    body: TokenDeviceBindingRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Turn single-device binding on or off for an existing link.
+
+    Both directions clear any claim, and both hang up the link's open streams.
+    Turning it on for a link a guest is already using sends their tab back to
+    the page, which now asks them to claim it — they are the likeliest first
+    device, and the claim is theirs for one tap. Turning it off is the same
+    push the other way: their page reloads without the lock.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await db.set_device_binding(token_id, body.enabled)
+    await ha_client.broadcast_device_unbound(token_id)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
+@router.post("/tokens/{token_id}/unbind")
+async def unbind_device(token_id: str, _: str = Depends(require_admin)) -> dict:
+    """Release a device-bound link's claim so the next device to claim it gets it.
+
+    The recovery path for a guest who changed phones, cleared their cookies, or
+    claimed the link inside a chat app's built-in browser. Binding stays on; only
+    the claim goes. POST, like revoke and rotate — it changes state.
+
+    The device that held the link is hung up at once rather than on its next
+    request, and it can claim again like any other device — Unbind is "let the
+    right phone in", not "ban this one". If the wrong person has the link,
+    Rotate Link is the tool: it releases the claim and retires the URL together.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if not row["device_binding"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This token is not locked to a device",
+        )
+    await db.clear_device_binding(token_id)
+    await ha_client.broadcast_device_unbound(token_id)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
 @router.post("/tokens/{token_id}/revoke")
 async def revoke_token(token_id: str, _: str = Depends(require_admin)) -> dict:
     row = await db.get_token_by_id(token_id)
@@ -468,11 +525,12 @@ async def rotate_token_slug(token_id: str, _: str = Depends(require_admin)) -> d
     supposed to end it.
 
     Everything except the slug survives — entities and their overrides, expiry,
-    the PIN, and the access log, which is keyed on token id. One thing does not:
+    the PIN, and the access log, which is keyed on token id. Two things do not:
     a guest holding a PIN session for the old link has to enter the PIN again,
     because that cookie is scoped Path=/g/<old-slug> and the browser will never
-    send it to the new one. That is the intended outcome — rotation exists to
-    hand the same access to a different person.
+    send it to the new one; and a device claim is released, for the same
+    cookie-path reason. That is the intended outcome — rotation exists to hand
+    the same access to a different person.
     """
     row = await db.get_token_by_id(token_id)
     if not row:

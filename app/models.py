@@ -143,6 +143,13 @@ class TokenCreateRequest(BaseModel):
     # Field(pattern=...) rejection becomes a 422 whose body echoes the offending
     # `input` back, which for this one field would put the PIN in a response.
     pin: str | None = None
+    # Lock the link to the first browser that claims it. Off by default.
+    device_binding: bool = False
+
+
+class TokenDeviceBindingRequest(BaseModel):
+    """Turn single-device binding on or off. Either direction clears the claim."""
+    enabled: bool
 
 
 class TokenPinRequest(BaseModel):

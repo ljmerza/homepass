@@ -130,7 +130,16 @@ class TokenCreateRequest(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
     entity_ids: list[str] = Field(..., min_length=1)
-    expires_in_seconds: int = Field(..., gt=0)
+    # Exactly one of these two. expires_in_seconds is a duration measured from
+    # the moment the link starts working; expires_at is an absolute epoch
+    # second — a check-out time — and is taken as written, whatever the start.
+    # NEVER_EXPIRES_SECONDS means "no expiry" in either field.
+    #
+    # "Exactly one" is enforced in the router rather than by a model_validator
+    # here: a model-level rejection is a 422 whose `input` is the whole request
+    # body, and the whole body includes the PIN. See `pin` below.
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
     # Epoch seconds the link starts working, or None for "right away". Capped
     # below the never-expires sentinel because a start beyond the end of every
     # expiry the app can express is not a schedule, it is a typo. A value in
@@ -175,7 +184,9 @@ class EntityMetaRequest(BaseModel):
 
 
 class TokenUpdateExpiryRequest(BaseModel):
-    expires_in_seconds: int = Field(..., gt=0)
+    """Exactly one of the two, same as on TokenCreateRequest."""
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
 
 
 # Template names come from the admin and are rendered back into the picker, so

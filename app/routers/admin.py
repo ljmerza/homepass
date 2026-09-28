@@ -135,6 +135,45 @@ def _expires_at_from(expires_in_seconds: int, starts_at: int | None) -> int:
     return anchor + expires_in_seconds
 
 
+def _resolve_expiry(
+    expires_in_seconds: int | None,
+    expires_at: int | None,
+    starts_at: int | None,
+) -> int:
+    """The absolute expiry a create or renew asked for, from either field.
+
+    Exactly one of the two must be present. Checked here rather than in the
+    request model because a model-level rejection echoes the whole body back in
+    the 422, and on a create the whole body carries the PIN.
+
+    An absolute expires_at is a calendar fact — a check-out time — so it is
+    taken as written and never re-anchored to the start the way a duration is.
+    It does have to be in the future, and after the start if there is one: a
+    link whose last moment precedes its first is not a schedule, it is a typo,
+    and storing it would mint a token that is born dead.
+    """
+    if (expires_in_seconds is None) == (expires_at is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Provide exactly one of expires_in_seconds or expires_at",
+        )
+    if expires_in_seconds is not None:
+        return _expires_at_from(expires_in_seconds, starts_at)
+    if expires_at == NEVER_EXPIRES_SECONDS:
+        return NEVER_EXPIRES_SECONDS
+    if expires_at <= int(time.time()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expires_at must be in the future",
+        )
+    if starts_at and expires_at <= starts_at:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expires_at must be after starts_at",
+        )
+    return expires_at
+
+
 def _row_to_response(row: Any, entity_ids: list[str] | None = None,
                      entity_meta: dict[str, dict[str, Any]] | None = None) -> dict:
     ip_raw = row["ip_allowlist"]
@@ -212,7 +251,7 @@ async def create_token(
 
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
-    expires_at = _expires_at_from(body.expires_in_seconds, starts_at)
+    expires_at = _resolve_expiry(body.expires_in_seconds, body.expires_at, starts_at)
 
     # Ensure slug uniqueness
     existing = await db.get_token_by_slug(slug)
@@ -376,7 +415,9 @@ async def update_token_expiry(
     # the guest that much access, measured from their check-in. Anchoring to
     # now instead would hand a still-pending token an expiry it might already
     # have passed by the time the link began working.
-    new_expires = _expires_at_from(body.expires_in_seconds, row["starts_at"])
+    new_expires = _resolve_expiry(
+        body.expires_in_seconds, body.expires_at, _normalise_starts_at(row["starts_at"])
+    )
     await db.update_token_expiry(token_id, new_expires)
     # Un-revoke if the token was revoked (admin is explicitly renewing it)
     if row["revoked"]:

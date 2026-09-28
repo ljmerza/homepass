@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Access Expired — {{ app_name }}{% endblock %}
+{% block title %}{% if reason == 'used' %}{{ t('page.expired.used_title') }}{% else %}{{ t('page.expired.title') }}{% endif %} — {{ app_name }}{% endblock %}
 
 {% block head_extra %}
 <meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
@@ -12,15 +12,20 @@
 {% block body %}
   <noscript>
     <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center;font-family:sans-serif;">
-      <p>JavaScript is required to use this app.</p>
+      <p>{{ t('page.js_required') }}</p>
     </div>
   </noscript>
   <div>
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
       <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">timer_off</span>
     </div>
-    <h1 class="text-2xl font-serif tracking-tight mb-2">Access Expired</h1>
-    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">This guest session has ended or the link is no longer valid. {{ contact_message }}</p>
+    {% if reason == 'used' %}
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.expired.used_title') }}</h1>
+    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">{{ t('page.expired.used_body') }} {{ contact_message }}</p>
+    {% else %}
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.expired.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">{{ t('page.expired.body') }} {{ contact_message }}</p>
+    {% endif %}
   </div>
 {% endblock %}
 

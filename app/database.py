@@ -98,11 +98,18 @@ async def create_token(
     entity_meta: dict[str, dict[str, Any]] | None = None,
     pin_hash: str | None = None,
     starts_at: int | None = None,
+    access_windows: list[dict[str, Any]] | None = None,
+    max_uses: int | None = None,
+    remember_pin: bool = True,
+    device_binding: bool = False,
+    country_allowlist: list[str] | None = None,
 ) -> dict[str, Any]:
     db = await get_db()
     token_id = str(uuid.uuid4())
     now = int(time.time())
     ip_json = json.dumps(ip_allowlist) if ip_allowlist else None
+    windows_json = json.dumps(access_windows) if access_windows else None
+    country_json = json.dumps(country_allowlist) if country_allowlist else None
 
     # Deduplicate entity IDs
     entity_ids = list(dict.fromkeys(entity_ids))
@@ -111,16 +118,20 @@ async def create_token(
         await db.execute("BEGIN IMMEDIATE")
         await db.execute(
             """INSERT INTO tokens
-               (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash),
+               (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash,
+                access_windows, max_uses, remember_pin, device_binding, country_allowlist)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash,
+             windows_json, max_uses, int(bool(remember_pin)), int(bool(device_binding)),
+             country_json),
         )
         if entity_ids:
             meta = entity_meta or {}
             await db.executemany(
                 "INSERT INTO token_entities "
-                "(token_id, entity_id, display_name, options, require_proximity) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "(token_id, entity_id, display_name, options, require_proximity, "
+                "require_local_network) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 [
                     (
                         token_id,
@@ -129,6 +140,7 @@ async def create_token(
                         json.dumps((meta.get(eid) or {}).get("options"))
                         if (meta.get(eid) or {}).get("options") else None,
                         int(bool((meta.get(eid) or {}).get("require_proximity"))),
+                        int(bool((meta.get(eid) or {}).get("require_local_network"))),
                     )
                     for eid in entity_ids
                 ],
@@ -138,6 +150,18 @@ async def create_token(
         await db.execute("ROLLBACK")
         raise
     return await get_token_by_id(token_id)  # type: ignore[return-value]
+
+
+async def any_country_allowlist() -> bool:
+    """Whether any live token restricts by country — i.e. whether the GeoIP
+    table will be needed. Revoked and expired tokens cannot reach the check."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM tokens WHERE country_allowlist IS NOT NULL "
+        "AND revoked = 0 AND expires_at > ? LIMIT 1",
+        (int(time.time()),),
+    ) as cur:
+        return await cur.fetchone() is not None
 
 
 async def get_token_by_slug(slug: str) -> aiosqlite.Row | None:
@@ -174,7 +198,7 @@ async def get_token_entities(token_id: str) -> list[str]:
 
 
 async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
-    """entity_id -> {"display_name": str|None, "options": dict, "require_proximity": bool}.
+    """entity_id -> {"display_name", "options", "require_proximity", "require_local_network"}.
 
     Kept separate from get_token_entities() on purpose: that function returns the
     plain id list the allowlist checks depend on, and must not grow a shape the
@@ -183,10 +207,12 @@ async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
     require_proximity rides alongside `options` rather than inside it, matching
     the storage: the blob is presentation, the column is an access control, and
     the command path reads the column through get_proximity_entity_ids().
+    require_local_network is the same shape for the same reason, read through
+    get_local_network_entity_ids().
     """
     db = await get_db()
     async with db.execute(
-        "SELECT entity_id, display_name, options, require_proximity "
+        "SELECT entity_id, display_name, options, require_proximity, require_local_network "
         "FROM token_entities WHERE token_id = ?",
         (token_id,),
     ) as cur:
@@ -204,6 +230,7 @@ async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
             "display_name": r["display_name"],
             "options": opts,
             "require_proximity": bool(r["require_proximity"]),
+            "require_local_network": bool(r["require_local_network"]),
         }
     return meta
 
@@ -225,25 +252,45 @@ async def get_proximity_entity_ids(token_id: str) -> set[str]:
     return {r["entity_id"] for r in rows}
 
 
+async def get_local_network_entity_ids(token_id: str) -> set[str]:
+    """The entity IDs on this token that only take commands from the home network.
+
+    Same contract as get_proximity_entity_ids(): a set of the gated IDs and
+    nothing else, so the command path answers "does a gate apply" with one
+    membership test.
+    """
+    db = await get_db()
+    async with db.execute(
+        "SELECT entity_id FROM token_entities "
+        "WHERE token_id = ? AND require_local_network = 1",
+        (token_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return {r["entity_id"] for r in rows}
+
+
 async def set_entity_meta(
     token_id: str,
     entity_id: str,
     display_name: str | None,
     options: dict[str, Any] | None,
     require_proximity: bool = False,
+    require_local_network: bool = False,
 ) -> bool:
-    """Set one entity's display name, options and proximity gate.
+    """Set one entity's display name, options, proximity and home-network gates.
 
     False if the entity is not on the token.
     """
     db = await get_db()
     cur = await db.execute(
-        "UPDATE token_entities SET display_name = ?, options = ?, require_proximity = ? "
+        "UPDATE token_entities SET display_name = ?, options = ?, require_proximity = ?, "
+        "require_local_network = ? "
         "WHERE token_id = ? AND entity_id = ?",
         (
             display_name,
             json.dumps(options) if options else None,
             int(bool(require_proximity)),
+            int(bool(require_local_network)),
             token_id,
             entity_id,
         ),
@@ -266,12 +313,15 @@ async def update_token_entities(
         # already stored would be silently dropped unless they are read back first
         # and re-applied. An explicit entity_meta argument wins over what is stored.
         async with db.execute(
-            "SELECT entity_id, display_name, options, require_proximity "
+            "SELECT entity_id, display_name, options, require_proximity, require_local_network "
             "FROM token_entities WHERE token_id = ?",
             (token_id,),
         ) as cur:
             existing = {
-                r["entity_id"]: (r["display_name"], r["options"], r["require_proximity"])
+                r["entity_id"]: (
+                    r["display_name"], r["options"], r["require_proximity"],
+                    r["require_local_network"],
+                )
                 for r in await cur.fetchall()
             }
         for eid, m in (entity_meta or {}).items():
@@ -281,14 +331,16 @@ async def update_token_entities(
                 name,
                 json.dumps(opts) if opts else None,
                 int(bool(m.get("require_proximity"))),
+                int(bool(m.get("require_local_network"))),
             )
 
         await db.execute("DELETE FROM token_entities WHERE token_id = ?", (token_id,))
         await db.executemany(
             "INSERT INTO token_entities "
-            "(token_id, entity_id, display_name, options, require_proximity) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [(token_id, eid, *existing.get(eid, (None, None, 0))) for eid in entity_ids],
+            "(token_id, entity_id, display_name, options, require_proximity, "
+            "require_local_network) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(token_id, eid, *existing.get(eid, (None, None, 0, 0))) for eid in entity_ids],
         )
         await db.execute("COMMIT")
     except Exception:
@@ -302,9 +354,91 @@ async def set_token_pin(token_id: str, pin_hash: str | None) -> None:
     Guest PIN sessions are signed with a key derived from this column, so a write
     here is also the revocation mechanism — outstanding sessions stop verifying
     with no session rows to delete.
+
+    The token's access links go in the same transaction. They are the other way
+    in past the PIN, and "change the PIN" is how an admin says "nobody who had
+    access keeps it" — a link surviving that would be the one exception they
+    did not know about. Clearing the PIN drops them too: they would bypass
+    nothing, and leaving them would revive them the moment a PIN was set again.
     """
     db = await get_db()
-    await db.execute("UPDATE tokens SET pin_hash = ? WHERE id = ?", (pin_hash, token_id))
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("UPDATE tokens SET pin_hash = ? WHERE id = ?", (pin_hash, token_id))
+        await db.execute("DELETE FROM token_access_codes WHERE token_id = ?", (token_id,))
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+
+
+async def set_token_remember_pin(token_id: str, remember_pin: bool) -> None:
+    """Choose whether a correct PIN is remembered across browser restarts.
+
+    Turning it off also signs out every guest holding a remembered session: the
+    session signature covers this setting (see app/guest_pin.py), so there is
+    nothing else to delete.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET remember_pin = ? WHERE id = ?",
+        (int(bool(remember_pin)), token_id),
+    )
+    await db.commit()
+
+
+async def set_device_binding(token_id: str, enabled: bool) -> None:
+    """Turn single-device binding on or off. Either way the claim is cleared.
+
+    Off has nothing to keep it for. On starts unclaimed even on a token that was
+    bound before, because a claim left over from an earlier stint of binding was
+    made by whoever happened to hold the link then — turning the switch back on
+    is the admin asking for a fresh first device, not the old one.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET device_binding = ?, device_secret_hash = NULL, "
+        "device_bound_at = NULL WHERE id = ?",
+        (int(bool(enabled)), token_id),
+    )
+    await db.commit()
+
+
+async def claim_device_binding(token_id: str, secret_hash: str) -> bool:
+    """Record the first device's claim. True if this call made it.
+
+    The WHERE clause is the race guard: two browsers claiming at once both run
+    this, SQLite serialises the writes, and only the first finds the column
+    still NULL. The second gets False and is refused like any other device, with
+    no read-then-write window between the check and the claim.
+    """
+    db = await get_db()
+    cur = await db.execute(
+        "UPDATE tokens SET device_secret_hash = ?, device_bound_at = ? "
+        "WHERE id = ? AND device_binding = 1 AND device_secret_hash IS NULL",
+        (secret_hash, int(time.time()), token_id),
+    )
+    await db.commit()
+    return cur.rowcount > 0
+
+
+async def clear_device_binding(token_id: str) -> None:
+    """Release the claim so the next device to claim the link gets it.
+
+    Writing the hash away is the whole revocation: the old device's cookie no
+    longer matches anything, with no session rows to hunt down.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET device_secret_hash = NULL, device_bound_at = NULL WHERE id = ?",
+        (token_id,),
+    )
+    await db.commit()
+
+
+async def update_token_label(token_id: str, label: str) -> None:
+    db = await get_db()
+    await db.execute("UPDATE tokens SET label = ? WHERE id = ?", (label, token_id))
     await db.commit()
 
 
@@ -330,6 +464,69 @@ async def activate_token_now(token_id: str) -> None:
     await db.commit()
 
 
+async def update_token_schedule(
+    token_id: str,
+    starts_at: int | None,
+    expires_at: int,
+    access_windows: list[dict[str, Any]] | None,
+    max_uses: int | None,
+    reset_uses: bool = False,
+) -> None:
+    """Replace every timing field on a token in one write.
+
+    One UPDATE rather than one per field so a guest request landing mid-edit
+    sees the old schedule or the new one, never half of each.
+    """
+    db = await get_db()
+    windows_json = json.dumps(access_windows) if access_windows else None
+    await db.execute(
+        "UPDATE tokens SET starts_at = ?, expires_at = ?, access_windows = ?, max_uses = ?, "
+        "use_count = CASE WHEN ? THEN 0 ELSE use_count END WHERE id = ?",
+        (starts_at, expires_at, windows_json, max_uses, int(reset_uses), token_id),
+    )
+    await db.commit()
+
+
+async def consume_token_use(token_id: str) -> bool:
+    """Claim one use of a use-limited token. False if none is left.
+
+    The check and the increment are the same statement, so two commands racing
+    for a single-use link's last use cannot both win it: SQLite applies the
+    UPDATEs one after the other and the loser's WHERE no longer matches. A
+    read-then-write here would let both through.
+
+    A token with no limit has nothing to claim and is never passed in.
+    """
+    db = await get_db()
+    cur = await db.execute(
+        "UPDATE tokens SET use_count = use_count + 1 "
+        "WHERE id = ? AND max_uses IS NOT NULL AND use_count < max_uses",
+        (token_id,),
+    )
+    await db.commit()
+    return cur.rowcount > 0
+
+
+async def refund_token_use(token_id: str) -> None:
+    """Give back a use claimed for a command Home Assistant then failed.
+
+    A single-use link that spent its only use on a 502 would leave the guest
+    locked out of the one thing they were sent the link to do.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET use_count = use_count - 1 WHERE id = ? AND use_count > 0",
+        (token_id,),
+    )
+    await db.commit()
+
+
+async def reset_token_uses(token_id: str) -> None:
+    db = await get_db()
+    await db.execute("UPDATE tokens SET use_count = 0 WHERE id = ?", (token_id,))
+    await db.commit()
+
+
 async def revoke_token(token_id: str) -> None:
     db = await get_db()
     await db.execute("UPDATE tokens SET revoked = 1 WHERE id = ?", (token_id,))
@@ -348,11 +545,31 @@ async def rotate_token_slug(token_id: str, new_slug: str) -> None:
     Everything else stays put — entities and their overrides, expiry, the PIN
     hash, and the access_log rows, which are keyed on token id and so are not
     touched by a slug write at all. This is for handing the same configuration
-    to a new guest, not for building a second token.
+    to a new guest, not for building a second token. The two exceptions are the
+    token's PIN-free access links, which are dropped, and its device claim,
+    which is released — see below.
     """
     db = await get_db()
-    await db.execute("UPDATE tokens SET slug = ? WHERE id = ?", (new_slug, token_id))
-    await db.commit()
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        # The device claim belongs to the guest the old link was sent to, and
+        # its cookie is scoped to the old slug's path, so the new link's guest
+        # could never present it — keeping the claim would lock the new link to
+        # a device that can no longer open it.
+        await db.execute(
+            "UPDATE tokens SET slug = ?, device_secret_hash = NULL, device_bound_at = NULL "
+            "WHERE id = ?",
+            (new_slug, token_id),
+        )
+        # Every access link embeds the old slug, so each is already a dead URL —
+        # and rotation is for handing the token to someone else, which is not
+        # the person those links were minted for. Drop them rather than leave a
+        # list of links that no longer open anything.
+        await db.execute("DELETE FROM token_access_codes WHERE token_id = ?", (token_id,))
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
 
 
 async def delete_token(token_id: str) -> None:
@@ -371,6 +588,124 @@ async def touch_token(token_id: str) -> None:
         (int(time.time()), token_id),
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Access links (PIN-free)
+# ---------------------------------------------------------------------------
+# Only hashes are stored — see migration 010. Nothing here ever returns
+# code_hash to a caller that renders it; the admin router lists links through
+# list_access_codes(), which does not select the column.
+
+async def create_access_code(
+    token_id: str, code_hash: str, label: str | None
+) -> dict[str, Any]:
+    db = await get_db()
+    code_id = uuid.uuid4().hex
+    now = int(time.time())
+    await db.execute(
+        "INSERT INTO token_access_codes (id, token_id, code_hash, label, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (code_id, token_id, code_hash, label, now),
+    )
+    await db.commit()
+    return {"id": code_id, "label": label, "created_at": now, "last_used_at": None}
+
+
+async def list_access_codes(token_id: str) -> list[dict[str, Any]]:
+    db = await get_db()
+    async with db.execute(
+        "SELECT id, label, created_at, last_used_at FROM token_access_codes "
+        "WHERE token_id = ? ORDER BY created_at, id",
+        (token_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def count_access_codes(token_id: str) -> int:
+    db = await get_db()
+    async with db.execute(
+        "SELECT COUNT(*) FROM token_access_codes WHERE token_id = ?", (token_id,)
+    ) as cur:
+        return (await cur.fetchone())[0]
+
+
+async def get_access_code_hashes(token_id: str) -> list[tuple[str, str]]:
+    """(id, code_hash) for one token's links — the candidate set a redemption
+    compares against. Scoped to the token so a code minted for another one can
+    never match here."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT id, code_hash FROM token_access_codes WHERE token_id = ?", (token_id,)
+    ) as cur:
+        rows = await cur.fetchall()
+    return [(r["id"], r["code_hash"]) for r in rows]
+
+
+async def access_code_exists(token_id: str, code_id: str) -> bool:
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM token_access_codes WHERE id = ? AND token_id = ?",
+        (code_id, token_id),
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
+async def touch_access_code(code_id: str) -> None:
+    db = await get_db()
+    await db.execute(
+        "UPDATE token_access_codes SET last_used_at = ? WHERE id = ?",
+        (int(time.time()), code_id),
+    )
+    await db.commit()
+
+
+async def rotate_access_code(
+    token_id: str, code_id: str, code_hash: str
+) -> dict[str, Any] | None:
+    """Replace one link's secret, keeping its label. None if it is not on the token.
+
+    The replacement gets a new id rather than a new hash under the old one. A
+    guest session names the link that minted it by id, so a fresh id is what
+    signs out the devices the old link let in — rotating a link that leaked has
+    to mean the leak stops working, not only that the URL does.
+    """
+    db = await get_db()
+    new_id = uuid.uuid4().hex
+    now = int(time.time())
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            "SELECT label FROM token_access_codes WHERE id = ? AND token_id = ?",
+            (code_id, token_id),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            await db.execute("ROLLBACK")
+            return None
+        await db.execute("DELETE FROM token_access_codes WHERE id = ?", (code_id,))
+        await db.execute(
+            "INSERT INTO token_access_codes (id, token_id, code_hash, label, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (new_id, token_id, code_hash, row["label"], now),
+        )
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    return {"id": new_id, "label": row["label"], "created_at": now, "last_used_at": None}
+
+
+async def delete_access_code(token_id: str, code_id: str) -> bool:
+    """Revoke one link. False if it is not on the token."""
+    db = await get_db()
+    cur = await db.execute(
+        "DELETE FROM token_access_codes WHERE id = ? AND token_id = ?",
+        (code_id, token_id),
+    )
+    await db.commit()
+    return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------
@@ -489,4 +824,49 @@ async def get_entity_template_by_name(name: str) -> dict[str, Any] | None:
 async def delete_entity_template(template_id: str) -> None:
     db = await get_db()
     await db.execute("DELETE FROM entity_templates WHERE id = ?", (template_id,))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# App settings overrides
+# ---------------------------------------------------------------------------
+# Admin-edited values layered over the add-on options — see
+# app/settings_store.py for which keys are allowed and in what order they win.
+# This layer stores JSON and knows nothing about the keys.
+
+async def get_app_settings() -> dict[str, Any]:
+    """key -> decoded value. A row that no longer decodes is skipped, not fatal:
+    the option it overrode is still there to fall back on."""
+    db = await get_db()
+    async with db.execute("SELECT key, value FROM app_settings") as cur:
+        rows = await cur.fetchall()
+    stored: dict[str, Any] = {}
+    for r in rows:
+        try:
+            stored[r["key"]] = json.loads(r["value"])
+        except (ValueError, TypeError):
+            logger.warning("Ignoring unreadable stored setting %r", r["key"])
+    return stored
+
+
+async def set_app_settings(changes: dict[str, Any]) -> None:
+    """Upsert several overrides in one transaction, so a save is all or nothing."""
+    db = await get_db()
+    now = int(time.time())
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.executemany(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            [(key, json.dumps(value), now) for key, value in changes.items()],
+        )
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+
+
+async def delete_app_setting(key: str) -> None:
+    db = await get_db()
+    await db.execute("DELETE FROM app_settings WHERE key = ?", (key,))
     await db.commit()

@@ -13,6 +13,8 @@ node_modules/
 # Generated at build time (Dockerfile runs generate_icons.py + tailwindcss)
 static/icons/
 static/dist.css
+# Downloaded at build time (Dockerfile fetches the DB-IP country database)
+geoip/
 
 # Linter / type checker caches
 .mypy_cache/
@@ -28,3 +30,6 @@ htmlcov/
 # macOS resource forks and metadata
 ._*
 .DS_Store
+
+# Fetched at build time (Dockerfile) — Swagger UI for /api/docs
+static/vendor/

@@ -22,6 +22,23 @@
 
 {% block head_styles %}
 <style>
+  /* The tinted round shape that carries an entity's icon, after the Mushroom
+     cards. Its colour says what the entity is doing (entityColor() in
+     static/domains.js). It is decoration, not a control: the toggle, or the
+     card itself where the card is tappable, is what acts. */
+  .entity-shape {
+    width: 42px; height: 42px; border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background-color .3s ease;
+  }
+  .entity-shape .material-symbols-outlined {
+    font-size: 22px;
+    transition: color .3s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .entity-shape, .entity-shape .material-symbols-outlined { transition: none; }
+  }
   @keyframes cardPulse { 0% { opacity: .7; } 100% { opacity: 1; } }
   .pulse { animation: cardPulse .4s ease-out; }
   @keyframes pingDot { 0% { transform: scale(1); opacity: 1; } 75%, 100% { transform: scale(2); opacity: 0; } }
@@ -109,7 +126,7 @@
 {% block body %}
 <noscript>
   <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center;font-family:sans-serif;">
-    <p>JavaScript is required to use this app.</p>
+    <p>{{ t('page.js_required') }}</p>
   </div>
 </noscript>
 
@@ -130,13 +147,13 @@
         <!-- Theme Toggle -->
         <div class="theme-toggle relative flex bg-soot/[0.04] dark:bg-white/[0.06] rounded-full p-[2px]">
           <div class="theme-slider absolute top-[2px] h-[calc(100%-4px)] rounded-full bg-white dark:bg-white/15 shadow-sm transition-all duration-200 ease-out"></div>
-          <button data-theme="system" data-action="set-theme" aria-label="System theme" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
+          <button data-theme="system" data-action="set-theme" aria-label="{{ t('page.theme.system') }}" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[14px]">brightness_auto</span>
           </button>
-          <button data-theme="light" data-action="set-theme" aria-label="Light theme" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
+          <button data-theme="light" data-action="set-theme" aria-label="{{ t('page.theme.light') }}" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[14px]">light_mode</span>
           </button>
-          <button data-theme="dark" data-action="set-theme" aria-label="Dark theme" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
+          <button data-theme="dark" data-action="set-theme" aria-label="{{ t('page.theme.dark') }}" class="theme-btn relative z-10 w-6 h-6 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[14px]">dark_mode</span>
           </button>
         </div>
@@ -146,7 +163,7 @@
         {% if not pending %}
         <span id="conn-badge" aria-live="polite" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-soot/5 dark:bg-white/5 text-muted">
           <span class="w-1.5 h-1.5 rounded-full bg-current" id="conn-dot"></span>
-          <span id="conn-text">Connecting</span>
+          <span id="conn-text">{{ t('conn.connecting') }}</span>
         </span>
         {% endif %}
       </div>
@@ -161,10 +178,10 @@
       <span aria-hidden="true" class="material-symbols-outlined text-accent">install_mobile</span>
     </div>
     <div class="flex-1 min-w-0">
-      <div class="text-sm font-semibold">Install as App</div>
+      <div class="text-sm font-semibold">{{ t('page.install.title') }}</div>
       <p id="install-instructions" class="text-xs text-muted mt-0.5 leading-relaxed"></p>
     </div>
-    <button data-action="dismiss-install" aria-label="Dismiss" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-soot/5 dark:hover:bg-white/5 -mt-0.5 -mr-1">
+    <button data-action="dismiss-install" aria-label="{{ t('page.install.dismiss') }}" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-soot/5 dark:hover:bg-white/5 -mt-0.5 -mr-1">
       <span aria-hidden="true" class="material-symbols-outlined text-muted text-lg">close</span>
     </button>
   </div>
@@ -174,7 +191,7 @@
 <main id="cards-container" class="max-w-xl mx-auto px-4 pt-3 pb-8">
   <div class="flex flex-col items-center justify-center py-16 text-muted">
     <div class="w-6 h-6 border-2 border-border-light dark:border-border-dark border-t-accent rounded-full spinner mb-3"></div>
-    <span class="text-sm">Loading devices...</span>
+    <span class="text-sm">{{ t('page.devices.loading') }}</span>
   </div>
 </main>
 
@@ -183,22 +200,35 @@
   <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center">
     <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">timer_off</span>
   </div>
-  <h2 class="text-2xl font-serif">Access Expired</h2>
-  <p class="text-muted max-w-xs">Your guest session has ended. {{ contact_message }}</p>
+  <h2 id="expired-title" class="text-2xl font-serif">{{ t('page.overlay.expired_title') }}</h2>
+  <p class="text-muted max-w-xs"><span id="expired-body">{{ t('page.overlay.expired_body') }}</span> {{ contact_message }}</p>
 </div>
 
 {% if pending %}
 <!-- Scheduled-start banner. Docked and compact rather than a full-screen
      blocker: the cards behind it are the guest's real ones, greyed out, so the
-     link can be shared ahead of time and still show what it will open. -->
+     link can be shared ahead of time and still show what it will open. The
+     same banner covers the gaps between weekly access windows; only the
+     wording changes with pending_reason. -->
 <div id="pending-banner" aria-live="polite" class="fixed bottom-0 inset-x-0 z-30 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark shadow-card">
   <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
     <div class="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center flex-shrink-0">
       <span aria-hidden="true" class="material-symbols-outlined text-accent">schedule</span>
     </div>
     <div class="flex-1 min-w-0">
-      <div class="text-sm font-semibold">Not active yet</div>
-      <div class="text-xs text-muted">Opens in <span id="pending-timer" class="font-mono font-bold tabular-nums text-accent"></span> · <span id="pending-when"></span></div>
+      <div class="text-sm font-semibold">
+        {%- if pending_reason == 'start' %}{{ t('page.pending.start') }}
+        {%- elif pending_reason == 'window' %}{{ t('page.pending.window') }}
+        {%- elif pending_reason == 'none' %}{{ t('page.pending.none') }}
+        {%- else %}{{ t('page.pending.unknown') }}{% endif -%}
+      </div>
+      {% if starts_at %}
+      <div class="text-xs text-muted">{% if pending_reason == 'window' %}{{ t('page.pending.next_in') }}{% else %}{{ t('page.pending.opens_in') }}{% endif %} <span id="pending-timer" class="font-mono font-bold tabular-nums text-accent"></span> · <span id="pending-when"></span></div>
+      {% elif pending_reason == 'none' %}
+      <div class="text-xs text-muted">{{ t('page.pending.none_body') }} {{ contact_message }}</div>
+      {% else %}
+      <div class="text-xs text-muted">{{ t('page.pending.retry') }}</div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -207,24 +237,24 @@
 <!-- Confirm bottom sheet -->
 <div class="fixed inset-0 z-40 hidden items-end justify-center bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="sheet-backdrop">
   <div class="sheet-animate bg-surface-light dark:bg-surface-dark rounded-t-2xl p-6 w-full max-w-lg text-center" role="dialog" aria-modal="true" aria-labelledby="sheet-title" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));">
-    <h3 class="text-lg font-serif mb-1.5" id="sheet-title">Confirm</h3>
+    <h3 class="text-lg font-serif mb-1.5" id="sheet-title">{{ t('page.sheet.confirm') }}</h3>
     <p class="text-sm text-muted mb-5" id="sheet-body"></p>
     <!-- Shown only for alarm panels that report a code_format. The code lives in
          this field and the command body and nowhere else — it is cleared when the
          sheet closes and never written to a log. -->
     <div class="hidden mb-5" id="sheet-code-wrap">
-      <input type="password" id="sheet-code" autocomplete="off" inputmode="numeric" placeholder="Code" aria-label="Alarm code"
+      <input type="password" id="sheet-code" autocomplete="off" inputmode="numeric" placeholder="{{ t('page.sheet.code_placeholder') }}" aria-label="{{ t('page.sheet.code_label') }}"
         class="w-full py-3 px-4 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-center text-lg font-mono tracking-[0.3em] outline-none focus:border-primary">
     </div>
     <!-- Colour / White switch. Drawn only when the bulb does both: HA's colour
          modes are mutually exclusive, so the two widgets take turns instead of
          stacking and implying they blend. -->
     <div class="hidden mb-4 gap-1 p-1 rounded-xl bg-soot/5 dark:bg-white/5" id="sheet-color-tabs"
-      role="group" aria-label="Colour mode">
+      role="group" aria-label="{{ t('page.color.mode_group') }}">
       <button type="button" id="sheet-tab-color" data-action="color-tab" data-tab="color" aria-pressed="true"
-        class="flex-1 py-2 rounded-lg text-sm font-display font-semibold">Colour</button>
+        class="flex-1 py-2 rounded-lg text-sm font-display font-semibold">{{ t('color.colour') }}</button>
       <button type="button" id="sheet-tab-white" data-action="color-tab" data-tab="white" aria-pressed="false"
-        class="flex-1 py-2 rounded-lg text-sm font-display font-semibold">White</button>
+        class="flex-1 py-2 rounded-lg text-sm font-display font-semibold">{{ t('page.color.white') }}</button>
     </div>
     <!-- Shown only for colour-capable lights the token opted in. The wheel
          applies live, so this sheet has nothing to confirm: Confirm is hidden
@@ -232,7 +262,7 @@
     <div class="hidden mb-5" id="sheet-wheel-wrap">
       <div class="color-wheel relative rounded-full mx-auto" id="sheet-wheel"
         style="width:220px;height:220px;"
-        role="slider" aria-label="Colour hue" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"
+        role="slider" aria-label="{{ t('page.color.hue') }}" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"
         tabindex="0" data-wheel-action="color">
         <div class="color-wheel-thumb absolute rounded-full" id="sheet-wheel-thumb"></div>
       </div>
@@ -244,15 +274,15 @@
       <div class="flex items-center gap-3">
         <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">local_fire_department</span>
         <input type="range" class="color-temp-range" id="sheet-temp" min="2000" max="6535" value="2700"
-          aria-label="Colour temperature" data-range-action="color-temp"
+          aria-label="{{ t('page.color.temperature') }}" data-range-action="color-temp"
           data-display-id="sheet-temp-val" data-display-suffix="K">
         <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">ac_unit</span>
       </div>
       <p class="text-xs text-muted mt-2 tabular-nums font-mono" id="sheet-temp-val">2700K</p>
     </div>
     <div class="flex gap-3">
-      <button data-action="close-sheet" id="sheet-cancel" class="flex-1 py-3.5 rounded-xl bg-soot/5 dark:bg-white/5 text-sm font-display font-semibold">Cancel</button>
-      <button id="sheet-ok" class="flex-1 py-3.5 rounded-xl bg-primary text-white text-sm font-display font-semibold">Confirm</button>
+      <button data-action="close-sheet" id="sheet-cancel" class="flex-1 py-3.5 rounded-xl bg-soot/5 dark:bg-white/5 text-sm font-display font-semibold">{{ t('sheet.cancel') }}</button>
+      <button id="sheet-ok" class="flex-1 py-3.5 rounded-xl bg-primary text-white text-sm font-display font-semibold">{{ t('page.sheet.confirm') }}</button>
     </div>
   </div>
 </div>
@@ -266,6 +296,9 @@
 <script src="{{ base_path }}/static/domains.js?v={{ build_version }}"></script>
 <script src="{{ base_path }}/static/theme.js?v={{ build_version }}"></script>
 <script nonce="{{ csp_nonce }}">
+// The guest's language and its strings, read by tr()/trn() in util.js. First,
+// so every line below — top-level constants included — can use them.
+const I18N = {{ i18n | tojson }};
 requestAnimationFrame(updateThemeToggles);
 
 const SLUG = {{ slug | tojson }};
@@ -285,7 +318,16 @@ const REQUIRES_LOCATION = {{ requires_location | tojson }};
 // /state, /command or either camera endpoint — all of which the server refuses
 // until the window opens anyway.
 const PENDING = {{ pending | tojson }};
+// When the link next works — the start time, or the next weekly window. Null
+// when nothing opens again before expiry, or the schedule could not be checked;
+// PENDING_REASON says which, and the banner has no countdown in either case.
 const STARTS_AT = {{ starts_at | tojson }};
+const PENDING_REASON = {{ pending_reason | tojson }};
+// Set only on a live page of a token with weekly windows: when the current
+// window shuts. The page reloads there into the countdown. The server refuses
+// every request after that moment regardless, and its stream says so too —
+// this is the belt for a tab whose stream is down.
+const WINDOW_CLOSES_AT = {{ window_closes_at | tojson }};
 const PREVIEW_ENTITY_IDS = {{ preview_entity_ids | tojson }};
 const PREVIEW_ENTITY_META = {{ preview_entity_meta | tojson }};
 // The countdown is measured against the server's clock, not the device's: a
@@ -317,13 +359,28 @@ let expiryInterval = setInterval(() => {
   if (document.visibilityState === 'visible') checkExpiry();
 }, 60000);
 
+// ── Weekly window watchdog ───────────────────────────────────────────
+// Checked every few seconds rather than once a minute like expiry: a window
+// is a boundary the guest can see coming, and controls that stay lit for a
+// minute past it look broken. Measured against the server clock, as the
+// pending countdown is.
+if (!PENDING && WINDOW_CLOSES_AT) {
+  setInterval(() => {
+    if (WINDOW_CLOSES_AT - (Date.now() / 1000 + CLOCK_OFFSET) <= 0) {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      location.reload();
+    }
+  }, 5000);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────
 async function init() {
   try {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
-    if (!r.ok) throw new Error('Failed to load');
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
+    if (!r.ok) throw new Error(tr('devices.load_error'));
     const data = await r.json();
     states = data.states;
     entityOrder = data.entities;
@@ -332,7 +389,7 @@ async function init() {
     connectSSE();
   } catch (e) {
     document.getElementById('cards-container').innerHTML =
-      `<div class="flex flex-col items-center py-16 text-primary text-sm"><span aria-hidden="true" class="material-symbols-outlined text-3xl mb-2">error</span>Failed to load devices.<br><small class="text-muted">${esc(e.message)}</small></div>`;
+      `<div class="flex flex-col items-center py-16 text-primary text-sm"><span aria-hidden="true" class="material-symbols-outlined text-3xl mb-2">error</span>${esc(tr('devices.load_failed'))}<br><small class="text-muted">${esc(e.message)}</small></div>`;
   }
 }
 
@@ -380,12 +437,21 @@ function startPending() {
   // still the guest's to use while they wait.
   container.querySelectorAll('button, input, select').forEach(el => el.disabled = true);
 
+  connectPendingSSE();
+  if (!STARTS_AT) {
+    // Nothing to count down to. A schedule that could not be checked is
+    // asked again shortly; one with no openings left waits for an admin edit,
+    // which the stream delivers.
+    if (PENDING_REASON === 'unknown') setTimeout(() => location.reload(), 60000);
+    return;
+  }
   // A guest days out wants the date, not a five-digit counter; both are shown.
-  document.getElementById('pending-when').textContent =
-    new Date(STARTS_AT * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  // Between weekly windows the weekday is what they plan around, so it leads.
+  document.getElementById('pending-when').textContent = PENDING_REASON === 'window'
+    ? new Date(STARTS_AT * 1000).toLocaleString(uiLocale(), { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : new Date(STARTS_AT * 1000).toLocaleString(uiLocale(), { dateStyle: 'medium', timeStyle: 'short' });
   updatePendingTimer();
   pendingInterval = setInterval(updatePendingTimer, 1000);
-  connectPendingSSE();
 }
 
 function updatePendingTimer() {
@@ -396,7 +462,7 @@ function updatePendingTimer() {
   const m = Math.floor((remaining % 3600) / 60);
   const s = Math.floor(remaining % 60);
   document.getElementById('pending-timer').textContent =
-    `${d ? d + 'd ' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    `${d ? tr('pending.days', { n: d }) + ' ' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // Reload rather than bring the page to life in place. The server is the only
@@ -421,10 +487,16 @@ function activatePending() {
 function connectPendingSSE() {
   pendingEventSource = new EventSource(`${BASE}/g/${SLUG}/stream`);
   pendingEventSource.addEventListener('token_activated', activatePending);
-  pendingEventSource.addEventListener('token_expired', () => {
+  // An admin edited the timing: the countdown may be pointing at the wrong
+  // moment, so let the server decide again.
+  pendingEventSource.addEventListener('schedule_changed', activatePending);
+  pendingEventSource.addEventListener('device_unbound', reloadForDevice);
+  // The PIN or a link without PIN changed; this device may be signed out.
+  pendingEventSource.addEventListener('access_changed', activatePending);
+  pendingEventSource.addEventListener('token_expired', e => {
     pendingEventSource.close();
     pendingEventSource = null;
-    showExpired();
+    showExpired(expiredReason(e));
   });
 }
 
@@ -436,7 +508,7 @@ function connectSSE() {
   const text = document.getElementById('conn-text');
   badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500';
   dot.className = 'w-1.5 h-1.5 rounded-full bg-current';
-  text.textContent = 'Connecting';
+  text.textContent = tr('conn.connecting');
 
   eventSource = new EventSource(`${BASE}/g/${SLUG}/stream`);
 
@@ -444,7 +516,7 @@ function connectSSE() {
     const wasReconnect = sseRetryCount > 0;
     badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-ink/10 text-ink';
     dot.className = 'w-1.5 h-1.5 rounded-full bg-current ping-dot';
-    text.textContent = 'Live';
+    text.textContent = tr('conn.live');
     sseRetryCount = 0;
     if (wasReconnect) refetchState();
   });
@@ -457,15 +529,32 @@ function connectSSE() {
 
   eventSource.addEventListener('reconnected', () => { refetchState(); });
 
-  eventSource.addEventListener('token_expired', () => {
+  eventSource.addEventListener('token_expired', e => {
     eventSource.close();
-    showExpired();
+    showExpired(expiredReason(e));
   });
+
+  // The weekly window just shut, or an admin changed the timing. Either way
+  // the server is the one that knows what this page should be now, and a
+  // reload re-runs every gate — landing on the countdown if access is over.
+  const reloadForSchedule = () => {
+    eventSource.close();
+    eventSource = null;
+    location.reload();
+  };
+  eventSource.addEventListener('window_closed', reloadForSchedule);
+  eventSource.addEventListener('schedule_changed', reloadForSchedule);
+  // The PIN or a link without PIN changed, or the server's periodic re-check
+  // found this device no longer let in. The same reload lands it on the PIN
+  // screen if it was signed out, and back on this page if not.
+  eventSource.addEventListener('access_changed', reloadForSchedule);
+
+  eventSource.addEventListener('device_unbound', reloadForDevice);
 
   eventSource.onerror = () => {
     badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-primary/10 text-primary';
     dot.className = 'w-1.5 h-1.5 rounded-full bg-current';
-    text.textContent = 'Offline';
+    text.textContent = tr('conn.offline');
     sseRetryCount++;
   };
 
@@ -477,6 +566,7 @@ async function refetchState() {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (!r.ok) return;
     const data = await r.json();
     states = data.states;
@@ -492,7 +582,36 @@ function showPinEntry() {
   location.reload();
 }
 
-function showExpired() {
+// This device no longer holds a device-bound link: the admin reset the lock,
+// turned it on or off, or the cookie is gone. Same move as the PIN case —
+// reload, and the server serves whichever of the claim screen, the refusal
+// page or the live page now applies. The page has no copy of either screen.
+function reloadForDevice() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  if (pendingEventSource) { pendingEventSource.close(); pendingEventSource = null; }
+  location.reload();
+}
+
+// A 403 from the device gate carries {detail: {device: true}}; every other 403
+// (the IP allowlist, a proximity refusal) does not. Read from a clone so a
+// caller that goes on to read the body itself still can.
+async function isDeviceRefusal(r) {
+  if (r.status !== 403) return false;
+  const err = await r.clone().json().catch(() => ({}));
+  return Boolean(err.detail && err.detail.device);
+}
+
+function expiredReason(e) {
+  try { return JSON.parse(e.data).reason || null; } catch { return null; }
+}
+
+// `reason` is "used" when a use-limited link has just spent its last use, and
+// only changes the wording.
+function showExpired(reason = null) {
+  if (reason === 'used') {
+    document.getElementById('expired-title').textContent = tr('overlay.used_title');
+    document.getElementById('expired-body').textContent = tr('overlay.used_body');
+  }
   const el = document.getElementById('expired-overlay');
   el.classList.remove('hidden');
   el.classList.add('flex');
@@ -503,7 +622,7 @@ function showExpired() {
 function renderAll() {
   const container = document.getElementById('cards-container');
   if (!entityOrder.length) {
-    container.innerHTML = '<div class="text-center py-16 text-sm text-muted">No devices assigned to this session.</div>';
+    container.innerHTML = `<div class="text-center py-16 text-sm text-muted">${esc(tr('devices.none'))}</div>`;
     return;
   }
 
@@ -522,13 +641,11 @@ function renderAll() {
 
   let html = '';
   for (const domain of sortedDomains) {
-    const label = DOMAIN_LABELS[domain] || (domain.charAt(0).toUpperCase() + domain.slice(1));
-    const icon = DOMAIN_ICONS[domain] || 'devices';
-    const color = DOMAIN_COLORS[domain] || { text: 'text-muted' };
-    html += `<div class="flex items-center gap-2 pt-5 pb-2 px-1">
-      <span aria-hidden="true" class="material-symbols-outlined text-base ${color.text}">${icon}</span>
-      <span class="text-[11px] font-mono font-bold uppercase tracking-widest text-muted">${esc(label)}</span>
-    </div>`;
+    const label = domainLabel(domain);
+    // Quieter than the cards under it: a heading that competes with the
+    // entities makes the list harder to scan, not easier. A real heading
+    // element, so a screen reader can jump from one group to the next.
+    html += `<h2 class="pt-5 pb-2 px-1 text-[13px] font-semibold text-muted">${esc(label)}</h2>`;
     // Within a domain, order by what the guest actually sees: the per-token
     // display name if set, then the HA friendly name, then the entity id.
     const ordered = groups[domain].slice().sort((a, b) =>
@@ -546,11 +663,13 @@ function buildCard(eid, state) {
   const domain = eid.split('.')[0];
   const name = displayName(eid, state);
   const stateStr = state.state;
-  const color = DOMAIN_COLORS[domain] || { bg: 'bg-gray-500/10', text: 'text-gray-500', icon: 'bg-gray-500' };
   const icon = DOMAIN_ICONS[domain] || 'devices';
 
-  const isOff = isDimmedState(domain, stateStr);
-  const opacityClass = isOff ? 'opacity-60' : '';
+  // Only the shape goes quiet when an entity is idle. Fading the whole card
+  // for "off", as this used to, took the name down with it — and the name is
+  // what a guest reads to find the thing they came for. An entity HA cannot
+  // reach still dims whole.
+  const opacityClass = isDimmedState(domain, stateStr) ? 'opacity-60' : '';
 
   let controls = '';
   if (domain === 'camera') controls = buildCameraControls(eid, state);
@@ -574,31 +693,31 @@ function buildCard(eid, state) {
   // prompt is expected rather than a surprise. Empty string on every other card,
   // which leaves those unchanged.
   const locationBadge = requiresLocation(eid)
-    ? `<span role="img" aria-label="Needs you to be at the property" title="Needs you to be at the property"
+    ? `<span role="img" aria-label="${esc(tr('card.needs_location'))}" title="${esc(tr('card.needs_location'))}"
         class="material-symbols-outlined text-muted flex-shrink-0" style="font-size:15px">location_on</span>`
     : '';
 
   const hasToggle = ['light', 'switch', 'input_boolean', 'group', 'fan'].includes(domain);
   const toggleHtml = hasToggle ? `<div class="toggle-track ${stateStr === 'on' ? 'on' : ''}"
     role="switch" aria-checked="${stateStr === 'on'}" tabindex="0"
-    aria-label="Toggle ${esc(name)}"
+    aria-label="${esc(tr('card.toggle', { name }))}"
     data-action="toggle" data-eid="${esc(eid)}" data-domain="${domain}"
     ></div>` : '';
 
   // The whole tile is the hit target for anything with a toggle; domains with
   // their own controls (climate, lock, cover, media, camera) are left alone.
   const cardTap = hasToggle
-    ? `data-action="card-toggle" data-eid="${esc(eid)}" data-domain="${domain}" role="button" tabindex="0" aria-label="Toggle ${esc(name)}" `
+    ? `data-action="card-toggle" data-eid="${esc(eid)}" data-domain="${domain}" role="button" tabindex="0" aria-label="${esc(tr('card.toggle', { name }))}" `
     : '';
 
-  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 mb-2.5 shadow-card border border-border-light dark:border-border-dark ${hasToggle ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
+  // Borderless, after Mushroom: the shadow alone lifts the card off the page,
+  // which reads softer than a ruled box and lets the tinted shape lead.
+  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 mb-2 shadow-card ${hasToggle ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl ${color.bg} flex items-center justify-center flex-shrink-0">
-        <span aria-hidden="true" class="material-symbols-outlined ${color.text}" id="icon-${cssId(eid)}">${icon}</span>
-      </div>
+      ${entityShapeHtml(eid, domain, state, icon)}
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-semibold truncate${locationBadge ? ' flex items-center gap-1' : ''}">${esc(name)}${locationBadge}</div>
-        <div class="text-xs text-muted" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
+        <div class="text-sm font-semibold leading-tight truncate${locationBadge ? ' flex items-center gap-1' : ''}">${esc(name)}${locationBadge}</div>
+        <div class="text-xs text-muted leading-tight mt-0.5" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
       </div>
       ${toggleHtml}
     </div>
@@ -606,10 +725,46 @@ function buildCard(eid, state) {
   </div>`;
 }
 
+// The shape's colour from the entity's state. A bulb's own colour arrives as
+// numbers, not as a class, so it is set as a style — the channels are clamped
+// integers by then (lightRgb), never a string off the wire.
+function shapeStyles(color) {
+  if (!color.rgb) return { shape: '', icon: '' };
+  const [r, g, b] = color.rgb;
+  return { shape: `rgb(${r} ${g} ${b} / 0.2)`, icon: `rgb(${r} ${g} ${b})` };
+}
+
+function entityShapeHtml(eid, domain, state, icon) {
+  const color = entityColor(domain, state);
+  const styles = shapeStyles(color);
+  return `<div class="entity-shape ${color.bg}" id="shape-${cssId(eid)}"${styles.shape ? ` style="background-color: ${styles.shape}"` : ''}>
+        <span aria-hidden="true" class="material-symbols-outlined ${color.text}" id="icon-${cssId(eid)}"${styles.icon ? ` style="color: ${styles.icon}"` : ''}>${icon}</span>
+      </div>`;
+}
+
+// Repaint a card's shape after a live update, so the colour keeps tracking
+// what the entity is doing. Cards rebuilt wholesale get theirs from buildCard.
+function applyEntityColor(eid, domain, state) {
+  const shape = document.getElementById(`shape-${cssId(eid)}`);
+  const icon = document.getElementById(`icon-${cssId(eid)}`);
+  if (!shape || !icon) return;
+  const color = entityColor(domain, state);
+  const styles = shapeStyles(color);
+  shape.className = `entity-shape ${color.bg}`;
+  shape.style.backgroundColor = styles.shape;
+  icon.className = `material-symbols-outlined ${color.text}`;
+  icon.style.color = styles.icon;
+}
+
+// Home Assistant drops every attribute of an unavailable entity, friendly_name
+// included, and the server stands in an empty state for one HA did not return
+// at all. Falling straight back to the id put a raw "light.hall_lamp" in
+// front of the guest; tidied up it is a guess, but a legible one, and it only
+// ever shows for an entity that is already broken.
 function displayName(eid, state) {
   const override = entityMeta[eid]?.display_name;
   if (override) return override;
-  return state?.attributes?.friendly_name || eid;
+  return state?.attributes?.friendly_name || previewName(eid).trim() || eid;
 }
 
 function entityOption(eid, key) {
@@ -624,90 +779,99 @@ function requiresLocation(eid) {
   return REQUIRES_LOCATION && Boolean(entityMeta[eid]?.require_proximity);
 }
 
+// A known HA state word in the guest's language, or the raw value
+// capitalised as it always was — an integration's own state, or one HA added
+// later, still reads the way HA spells it.
+function stateLabel(group, value) {
+  const key = `${group}.${value}`;
+  return hasTr(key) ? tr(key) : value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// HA's two "no value" states, which any domain can report. Everything else a
+// sensor, a counter or a select holds is data and is shown as it is.
+function rawState(stateStr) {
+  return stateStr === 'unavailable' || stateStr === 'unknown' ? tr(`state.${stateStr}`) : stateStr;
+}
+
 function formatState(domain, stateStr, state) {
   stateStr = stateStr || 'unknown';
   if (domain === 'climate') {
-    const mode = state.attributes?.hvac_action || stateStr;
+    const mode = stateLabel('climate', state.attributes?.hvac_action || stateStr);
     const temp = state.attributes?.current_temperature;
-    return temp ? `${esc(mode.charAt(0).toUpperCase() + mode.slice(1))} · ${temp}°` : esc(mode.charAt(0).toUpperCase() + mode.slice(1));
+    return temp ? `${esc(mode)} · ${temp}°` : esc(mode);
   }
   if (domain === 'media_player') {
-    if (stateStr === 'playing') return 'Playing';
-    if (stateStr === 'paused') return 'Paused';
-    if (stateStr === 'idle') return 'Idle';
+    if (stateStr === 'playing') return esc(tr('state.playing'));
+    if (stateStr === 'paused') return esc(tr('state.paused'));
+    if (stateStr === 'idle') return esc(tr('state.idle'));
   }
-  if (domain === 'lock') return stateStr === 'locked' ? 'Locked' : 'Unlocked';
-  if (domain === 'cover') return esc(stateStr.charAt(0).toUpperCase() + stateStr.slice(1));
-  if (domain === 'alarm_control_panel') return esc(ALARM_STATE_LABELS[stateStr] || stateStr);
+  if (domain === 'lock') return esc(stateStr === 'locked' ? tr('state.locked') : tr('state.unlocked'));
+  if (domain === 'cover') return esc(stateLabel('cover', stateStr));
+  if (domain === 'alarm_control_panel') return esc(ALARM_STATE_LABELS[stateStr] || rawState(stateStr));
   // A button's state is the timestamp of the last press, or unknown if it has
   // never been pressed.
   if (domain === 'button' || domain === 'input_button') {
     const pressed = new Date(stateStr);
-    return isNaN(pressed) ? 'Ready' : `Pressed ${esc(pressed.toLocaleTimeString(undefined, { timeStyle: 'short' }))}`;
+    return esc(isNaN(pressed) ? tr('state.ready')
+      : tr('state.pressed', { time: pressed.toLocaleTimeString(uiLocale(), { timeStyle: 'short' }) }));
   }
-  if (domain === 'counter') return esc(stateStr);
+  if (domain === 'counter') return esc(rawState(stateStr));
   if (domain === 'timer') {
-    const labels = { idle: 'Idle', active: 'Running', paused: 'Paused' };
-    return esc(labels[stateStr] || stateStr);
+    const labels = { idle: tr('state.idle'), active: tr('state.running'), paused: tr('state.paused') };
+    return esc(labels[stateStr] || rawState(stateStr));
   }
   if (domain === 'input_number') {
     const unit = state.attributes?.unit_of_measurement;
-    return unit ? `${esc(stateStr)} ${esc(unit)}` : esc(stateStr);
+    return unit ? `${esc(rawState(stateStr))} ${esc(unit)}` : esc(rawState(stateStr));
   }
   if (domain === 'input_text') {
-    if (!stateStr || stateStr === 'unknown') return 'Empty';
-    return esc(stateStr.length > 32 ? stateStr.slice(0, 32) + '\u2026' : stateStr);
+    if (!stateStr || stateStr === 'unknown') return esc(tr('state.empty'));
+    return esc(stateStr.length > 32 ? stateStr.slice(0, 32) + '\u2026' : rawState(stateStr));
   }
-  if (domain === 'input_select') return esc(stateStr);
+  if (domain === 'input_select') return esc(rawState(stateStr));
   if (DATETIME_DOMAINS.includes(domain)) {
     const mode = pickerMode(domain, state);
     const value = pickerValue(domain, state, mode);
-    if (!value) return 'Not set';
+    if (!value) return esc(tr('state.not_set'));
     if (mode === 'time') return esc(value.slice(0, 5));
     return esc(value.replace('T', ' '));
   }
   if (domain === 'schedule') {
-    if (stateStr === 'on') return 'Active';
-    if (stateStr === 'off') return 'Inactive';
-    return esc(stateStr);
+    if (stateStr === 'on') return esc(tr('state.active'));
+    if (stateStr === 'off') return esc(tr('state.inactive'));
+    return esc(rawState(stateStr));
   }
   if (domain === 'fan') {
     const pct = state.attributes?.percentage;
-    if (stateStr === 'on' && pct != null) return `On · ${pct}%`;
-    return esc(stateStr === 'on' ? 'On' : stateStr === 'off' ? 'Off' : stateStr);
+    if (stateStr === 'on' && pct != null) return esc(tr('state.on_percent', { pct }));
+    return esc(stateStr === 'on' ? tr('state.on') : stateStr === 'off' ? tr('state.off') : rawState(stateStr));
   }
   // "recording" vs "streaming" only reflects what Frigate is doing with the feed
   // and is not something the viewer can act on, so it is hidden. An unavailable
   // camera still says so, because that one matters.
   if (domain === 'camera') {
-    return (stateStr === 'unavailable' || stateStr === 'unknown') ? esc(stateStr) : '';
+    return (stateStr === 'unavailable' || stateStr === 'unknown') ? esc(rawState(stateStr)) : '';
   }
   if (domain === 'sensor') {
     const unit = state.attributes?.unit_of_measurement;
-    return unit ? `${esc(stateStr)} ${esc(unit)}` : esc(stateStr);
+    return unit ? `${esc(rawState(stateStr))} ${esc(unit)}` : esc(rawState(stateStr));
   }
   if (domain === 'binary_sensor') {
-    if (stateStr === 'on') return 'On';
-    if (stateStr === 'off') return 'Off';
-    return esc(stateStr);
+    if (stateStr === 'on') return esc(tr('state.on'));
+    if (stateStr === 'off') return esc(tr('state.off'));
+    return esc(rawState(stateStr));
   }
-  return esc(stateStr === 'on' ? 'On' : stateStr === 'off' ? 'Off' : stateStr);
+  return esc(stateStr === 'on' ? tr('state.on') : stateStr === 'off' ? tr('state.off') : rawState(stateStr));
 }
 
-// Domains whose state is a reading or a stored value rather than an on/off
-// signal — "off" means nothing to them, so only a missing entity dims the card.
-const VALUE_STATE_DOMAINS = ['sensor', 'binary_sensor', 'camera', 'schedule', 'alarm_control_panel',
-  'counter', 'timer', 'input_number', 'input_text', 'input_select',
-  'time', 'datetime', 'input_datetime'];
-
+// Whether the whole card dims: only for an entity HA cannot reach or has no
+// value for. Being switched off is not that — the shape's colour already says
+// "idle", and the name has to stay readable either way.
 function isDimmedState(domain, stateStr) {
   // A button that has never been pressed reports 'unknown'. That is its resting
   // state, not an unavailable entity.
   if (domain === 'button' || domain === 'input_button') return stateStr === 'unavailable';
-  if (VALUE_STATE_DOMAINS.includes(domain)) {
-    return stateStr === 'unavailable' || stateStr === 'unknown';
-  }
-  return stateStr === 'off' || stateStr === 'unavailable' || stateStr === 'unknown';
+  return stateStr === 'unavailable' || stateStr === 'unknown';
 }
 
 function buildCameraControls(eid, state) {
@@ -868,19 +1032,19 @@ function buildLightControls(eid, state) {
   const brightness = Number(state.attributes?.brightness) || 255;
   const pct = Math.round((brightness / 255) * 100);
   const swatch = showColor ? `<button type="button" class="color-swatch" id="swatch-${cssId(eid)}"
-      style="background: ${swatchColor(state)}" aria-label="Choose colour"
+      style="background: ${swatchColor(state)}" aria-label="${esc(tr('light.choose_colour'))}"
       data-action="open-color-sheet" data-eid="${esc(eid)}"></button>` : '';
 
   if (!showBrightness) {
     return `<div class="mt-3 flex items-center gap-3">
       ${swatch}
-      <span class="text-xs text-muted">Colour</span>
+      <span class="text-xs text-muted">${esc(tr('color.colour'))}</span>
     </div>`;
   }
   return `<div data-slider-section class="mt-3 flex items-center gap-3">
     <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">brightness_low</span>
     <input type="range" min="1" max="100" value="${pct}" id="bri-${cssId(eid)}"
-      aria-label="Brightness"
+      aria-label="${esc(tr('light.brightness'))}"
       data-range-action="brightness" data-eid="${esc(eid)}" data-display-id="bri-val-${cssId(eid)}">
     <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">brightness_high</span>
     <span class="text-xs text-muted tabular-nums min-w-[36px] text-right font-mono" id="bri-val-${cssId(eid)}">${pct}%</span>
@@ -919,24 +1083,40 @@ function buildClimateControls(eid, state) {
   return `<div class="mt-3 rounded-xl bg-gradient-to-br ${gradClass} ${darkGradClass} p-4">
     <div class="text-center">
       <div class="text-4xl font-serif tabular-nums" id="temp-cur-${cssId(eid)}">${esc(String(current))}<span class="text-lg text-muted">${esc(unit)}</span></div>
-      <div class="text-xs text-muted mt-1 font-mono" id="temp-tgt-${cssId(eid)}">Target: ${esc(String(target))}${esc(unit)}${humidity != null ? ` · ${humidity}% humidity` : ''}</div>
+      <div class="text-xs text-muted mt-1 font-mono" id="temp-tgt-${cssId(eid)}">${esc(climateTargetText(target, unit, humidity))}</div>
     </div>
     <div class="flex items-center justify-center gap-6 mt-3">
-      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="-0.5" aria-label="Decrease temperature" class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
+      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="-0.5" aria-label="${esc(tr('climate.decrease'))}" class="w-11 h-11 rounded-full bg-surface-light dark:bg-surface-dark shadow-sm flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined">remove</span>
       </button>
-      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="0.5" aria-label="Increase temperature" class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
+      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="0.5" aria-label="${esc(tr('climate.increase'))}" class="w-11 h-11 rounded-full bg-surface-light dark:bg-surface-dark shadow-sm flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined">add</span>
       </button>
     </div>
-    <div class="flex justify-center gap-2 mt-3 flex-wrap" role="radiogroup" aria-label="HVAC mode" id="hvac-pills-${cssId(eid)}">
+    <div class="flex justify-center gap-2 mt-3 flex-wrap" role="radiogroup" aria-label="${esc(tr('climate.mode'))}" id="hvac-pills-${cssId(eid)}">
       ${hvacModes.map(m => `<button data-action="set-hvac" data-eid="${esc(eid)}" data-mode="${esc(m)}"
         role="radio" aria-checked="${activeMode === m}"
         class="px-3 py-1 rounded-full text-xs font-display font-semibold transition-colors ${activeMode === m
           ? 'bg-primary text-white' : 'bg-surface-light dark:bg-surface-dark text-muted border border-border-light dark:border-border-dark'}"
-        ><span aria-hidden="true" class="material-symbols-outlined text-sm align-middle mr-0.5">${HVAC_ICONS[m] || 'thermostat'}</span>${esc(m)}</button>`).join('')}
+        ><span aria-hidden="true" class="material-symbols-outlined text-sm align-middle mr-0.5">${HVAC_ICONS[m] || 'thermostat'}</span>${esc(hvacLabel(m))}</button>`).join('')}
     </div>
   </div>`;
+}
+
+// "Target: 21° · 40% humidity" — the line under a thermostat's reading. One
+// sentence per case rather than glued fragments, so a translation can put the
+// humidity where its language wants it.
+function climateTargetText(target, unit, humidity) {
+  const temp = `${target}${unit}`;
+  return humidity != null
+    ? tr('climate.target_humidity', { temp, humidity })
+    : tr('climate.target', { temp });
+}
+
+// HA's hvac_modes values. A mode HA adds later falls back to its raw name,
+// which is what every pill showed before.
+function hvacLabel(mode) {
+  return hasTr(`hvac.${mode}`) ? tr(`hvac.${mode}`) : mode;
 }
 
 function buildLockControls(eid, state) {
@@ -944,17 +1124,17 @@ function buildLockControls(eid, state) {
   const supportsOpen = (Number(state.attributes?.supported_features) & 1) !== 0;
   return `<div class="mt-3 grid ${supportsOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-2">
   <button data-action="confirm-lock" data-eid="${esc(eid)}" data-locked="${locked}" id="lock-btn-${cssId(eid)}"
-    class="w-full py-3 rounded-xl border-2 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]
+    class="w-full py-3 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]
     ${locked
-      ? 'border-primary/30 text-primary bg-primary/5'
-      : 'border-ink/30 text-ink bg-ink/5'}">
+      ? 'text-primary bg-primary/10'
+      : 'text-ink bg-ink/10'}">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">${locked ? 'lock' : 'lock_open'}</span>
-    ${locked ? 'Tap to Unlock' : 'Tap to Lock'}
+    ${esc(locked ? tr('lock.tap_unlock') : tr('lock.tap_lock'))}
   </button>
   ${supportsOpen ? `<button data-action="confirm-lock-open" data-eid="${esc(eid)}"
-    class="w-full py-3 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+    class="w-full py-3 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">meeting_room</span>
-    Open
+    ${esc(tr('lock.open'))}
   </button>` : ''}
   </div>`;
 }
@@ -979,7 +1159,7 @@ function buildMediaControls(eid, state) {
     <div class="flex items-center gap-2">
       <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">volume_down</span>
       <input type="range" min="0" max="100" value="${volume}" id="vol-${cssId(eid)}"
-        aria-label="Volume"
+        aria-label="${esc(tr('media.volume'))}"
         data-range-action="volume" data-eid="${esc(eid)}" data-display-id="vol-val-${cssId(eid)}">
       <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">volume_up</span>
       <span class="text-xs text-muted tabular-nums min-w-[36px] text-right font-mono" id="vol-val-${cssId(eid)}">${volume}%</span>
@@ -989,14 +1169,14 @@ function buildMediaControls(eid, state) {
 
 function buildCoverControls(eid) {
   return `<div class="flex gap-2 mt-3">
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="open_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
-      <span aria-hidden="true" class="material-symbols-outlined text-base">expand_less</span> Open
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="open_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+      <span aria-hidden="true" class="material-symbols-outlined text-base">expand_less</span> ${esc(tr('cover.open_action'))}
     </button>
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="stop_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
-      <span aria-hidden="true" class="material-symbols-outlined text-base">stop</span> Stop
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="stop_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+      <span aria-hidden="true" class="material-symbols-outlined text-base">stop</span> ${esc(tr('cover.stop_action'))}
     </button>
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="close_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
-      <span aria-hidden="true" class="material-symbols-outlined text-base">expand_more</span> Close
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="close_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+      <span aria-hidden="true" class="material-symbols-outlined text-base">expand_more</span> ${esc(tr('cover.close_action'))}
     </button>
   </div>`;
 }
@@ -1011,7 +1191,7 @@ function buildFanControls(eid, state) {
   return `<div data-slider-section class="mt-3 flex items-center gap-3">
     <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">air</span>
     <input type="range" min="0" max="100" step="${step}" value="${pct}"
-      aria-label="Fan speed" id="fan-${cssId(eid)}"
+      aria-label="${esc(tr('fan.speed'))}" id="fan-${cssId(eid)}"
       data-range-action="fan-speed" data-eid="${esc(eid)}" data-display-id="fan-val-${cssId(eid)}">
     <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">mode_fan</span>
     <span class="text-xs text-muted tabular-nums min-w-[36px] text-right font-mono" id="fan-val-${cssId(eid)}">${pct}%</span>
@@ -1023,13 +1203,15 @@ function buildFanControls(eid, state) {
 // advertises get a button. alarm_trigger has a bit too (8) and is deliberately
 // not offered — see ALLOWED_SERVICES.
 const ALARM_MODES = [
-  { feature: 1, armed: 'armed_home',  service: 'alarm_arm_home',  label: 'Home',  icon: 'home' },
-  { feature: 2, armed: 'armed_away',  service: 'alarm_arm_away',  label: 'Away',  icon: 'directions_walk' },
-  { feature: 4, armed: 'armed_night', service: 'alarm_arm_night', label: 'Night', icon: 'bedtime' },
+  { feature: 1, armed: 'armed_home',  service: 'alarm_arm_home',  label: tr('alarm.mode.home'),  icon: 'home' },
+  { feature: 2, armed: 'armed_away',  service: 'alarm_arm_away',  label: tr('alarm.mode.away'),  icon: 'directions_walk' },
+  { feature: 4, armed: 'armed_night', service: 'alarm_arm_night', label: tr('alarm.mode.night'), icon: 'bedtime' },
 ];
 const ALARM_STATE_LABELS = {
-  disarmed: 'Disarmed', armed_home: 'Armed Home', armed_away: 'Armed Away',
-  armed_night: 'Armed Night', arming: 'Arming', pending: 'Pending', triggered: 'Triggered',
+  disarmed: tr('alarm.state.disarmed'), armed_home: tr('alarm.state.armed_home'),
+  armed_away: tr('alarm.state.armed_away'), armed_night: tr('alarm.state.armed_night'),
+  arming: tr('alarm.state.arming'), pending: tr('alarm.state.pending'),
+  triggered: tr('alarm.state.triggered'),
 };
 
 function buildAlarmControls(eid, state) {
@@ -1037,20 +1219,20 @@ function buildAlarmControls(eid, state) {
   const modes = ALARM_MODES.filter(m => (features & m.feature) !== 0);
 
   const armButtons = modes.map(m => `<button data-action="confirm-alarm" data-eid="${esc(eid)}"
-    data-service="${m.service}" data-title="Arm ${m.label}?" data-body="This will arm the alarm in ${m.label} mode."
-    class="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl border-2 font-display font-semibold text-xs transition-colors active:scale-[0.98] ${
+    data-service="${m.service}" data-title="${esc(tr('alarm.arm_title', { mode: m.label }))}" data-body="${esc(tr('alarm.arm_body', { mode: m.label }))}"
+    class="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-display font-semibold text-xs transition-colors active:scale-[0.98] ${
       state.state === m.armed
-        ? 'border-rose-600/40 text-rose-600 bg-rose-600/10'
-        : 'border-border-light dark:border-border-dark text-muted'}">
+        ? 'text-rose-600 bg-rose-600/15'
+        : 'bg-soot/[0.06] dark:bg-white/10 text-muted'}">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">${m.icon}</span>
-    ${m.label}
+    ${esc(m.label)}
   </button>`).join('');
 
   const disarm = state.state === 'disarmed' ? '' : `<button data-action="confirm-alarm" data-eid="${esc(eid)}"
-    data-service="alarm_disarm" data-title="Disarm?" data-body="This will disarm the alarm."
-    class="w-full mt-2 py-3 rounded-xl border-2 border-ink/30 text-ink bg-ink/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+    data-service="alarm_disarm" data-title="${esc(tr('alarm.disarm_title'))}" data-body="${esc(tr('alarm.disarm_body'))}"
+    class="w-full mt-2 py-3 rounded-xl text-ink bg-ink/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">lock_open</span>
-    Disarm
+    ${esc(tr('alarm.disarm'))}
   </button>`;
 
   if (!armButtons && !disarm) return '';
@@ -1063,9 +1245,9 @@ function buildAlarmControls(eid, state) {
 function buildPressControls(eid, domain) {
   return `<div class="mt-3">
     <button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="${domain}" data-service="press"
-      class="w-full py-3 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+      class="w-full py-3 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
       <span aria-hidden="true" class="material-symbols-outlined text-lg">radio_button_checked</span>
-      Press
+      ${esc(tr('button.press'))}
     </button>
   </div>`;
 }
@@ -1073,15 +1255,15 @@ function buildPressControls(eid, domain) {
 function buildCounterControls(eid, state) {
   const value = isNaN(Number(state.state)) ? '--' : state.state;
   const btn = (service, icon, label, extra = '') => `<button data-action="svc-cmd" data-eid="${esc(eid)}"
-    data-domain="counter" data-service="${service}" aria-label="${label}"
-    class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center active:scale-95 transition-transform ${extra}">
+    data-domain="counter" data-service="${service}" aria-label="${esc(label)}"
+    class="w-11 h-11 rounded-full bg-soot/[0.06] dark:bg-white/10 flex items-center justify-center active:scale-95 transition-transform ${extra}">
     <span aria-hidden="true" class="material-symbols-outlined">${icon}</span>
   </button>`;
   return `<div class="mt-3 flex items-center justify-center gap-4">
-    ${btn('decrement', 'remove', 'Decrease')}
+    ${btn('decrement', 'remove', tr('counter.decrease'))}
     <span class="text-2xl font-serif tabular-nums w-12 text-center">${esc(String(value))}</span>
-    ${btn('increment', 'add', 'Increase')}
-    ${btn('reset', 'restart_alt', 'Reset', 'text-muted')}
+    ${btn('increment', 'add', tr('counter.increase'))}
+    ${btn('reset', 'restart_alt', tr('counter.reset'), 'text-muted')}
   </div>`;
 }
 
@@ -1114,14 +1296,14 @@ function buildTimerControls(eid, state) {
     <div class="text-center text-2xl font-serif tabular-nums mb-3">${esc(timerRemaining(state))}</div>
     <div class="grid ${idle ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
       <button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="timer" data-service="${running ? 'pause' : 'start'}"
-        class="py-2.5 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+        class="py-2.5 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined text-lg">${running ? 'pause' : 'play_arrow'}</span>
-        ${running ? 'Pause' : state.state === 'paused' ? 'Resume' : 'Start'}
+        ${esc(running ? tr('timer.pause') : state.state === 'paused' ? tr('timer.resume') : tr('timer.start'))}
       </button>
       ${idle ? '' : `<button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="timer" data-service="cancel"
-        class="py-2.5 rounded-xl border-2 border-primary/30 text-primary bg-primary/5 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+        class="py-2.5 rounded-xl text-primary bg-primary/10 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined text-lg">stop</span>
-        Cancel
+        ${esc(tr('timer.cancel'))}
       </button>`}
     </div>
   </div>`;
@@ -1140,7 +1322,7 @@ function buildNumberControls(eid, state) {
       <span>${esc(String(max))}${esc(unit)}</span>
     </div>
     <input type="range" min="${min}" max="${max}" step="${step}" value="${value}" id="num-${cssId(eid)}"
-      aria-label="Value" data-range-action="input-number" data-eid="${esc(eid)}"
+      aria-label="${esc(tr('number.value'))}" data-range-action="input-number" data-eid="${esc(eid)}"
       data-display-id="num-val-${cssId(eid)}" data-display-suffix="${esc(unit)}">
   </div>`;
 }
@@ -1245,8 +1427,8 @@ function updateCard(eid, state) {
   const stateEl = document.getElementById(`state-${cssId(eid)}`);
   if (stateEl) stateEl.textContent = formatState(domain, state.state, state);
 
-  const isOff = isDimmedState(domain, state.state);
-  card.classList.toggle('opacity-60', isOff);
+  card.classList.toggle('opacity-60', isDimmedState(domain, state.state));
+  applyEntityColor(eid, domain, state);
 
   // Domain-specific updates may replaceChild, so pulse is handled there
   const rebuilds = REBUILD_DOMAINS.includes(domain);
@@ -1274,7 +1456,6 @@ function updateLightCard(eid, state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 
   // Which controls the card carries, against which it should carry now. A
   // colour tick echoes back several times a second, so this compares both
@@ -1323,7 +1504,6 @@ function updateToggleCard(state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 }
 
 function updateClimateCard(eid, state) {
@@ -1342,7 +1522,7 @@ function updateClimateCard(eid, state) {
     unitSpan.textContent = unit;
     curEl.appendChild(unitSpan);
   }
-  if (tgtEl) tgtEl.textContent = `Target: ${state.attributes?.temperature ?? '--'}${unit}${humidity != null ? ` · ${humidity}% humidity` : ''}`;
+  if (tgtEl) tgtEl.textContent = climateTargetText(state.attributes?.temperature ?? '--', unit, humidity);
 
   // M-18: Re-render HVAC pills
   const pillsEl = document.getElementById(`hvac-pills-${cssId(eid)}`);
@@ -1355,7 +1535,7 @@ function updateClimateCard(eid, state) {
       role="radio" aria-checked="${activeMode === m}"
       class="px-3 py-1 rounded-full text-xs font-display font-semibold transition-colors ${activeMode === m
         ? 'bg-primary text-white' : 'bg-surface-light dark:bg-surface-dark text-muted border border-border-light dark:border-border-dark'}"
-      ><span aria-hidden="true" class="material-symbols-outlined text-sm align-middle mr-0.5">${HVAC_ICONS[m] || 'thermostat'}</span>${esc(m)}</button>`).join('');
+      ><span aria-hidden="true" class="material-symbols-outlined text-sm align-middle mr-0.5">${HVAC_ICONS[m] || 'thermostat'}</span>${esc(hvacLabel(m))}</button>`).join('');
   }
 
   // M-18: Update gradient
@@ -1399,10 +1579,10 @@ function updateLockCard(eid, state) {
   }
   const btn = document.getElementById(`lock-btn-${cssId(eid)}`);
   if (btn) {
-    btn.className = `w-full py-3 rounded-xl border-2 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] ${
-      locked ? 'border-primary/30 text-primary bg-primary/5' : 'border-ink/30 text-ink bg-ink/5'
+    btn.className = `w-full py-3 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] ${
+      locked ? 'text-primary bg-primary/10' : 'text-ink bg-ink/10'
     }`;
-    btn.innerHTML = `<span aria-hidden="true" class="material-symbols-outlined text-lg">${locked ? 'lock' : 'lock_open'}</span>${locked ? 'Tap to Unlock' : 'Tap to Lock'}`;
+    btn.innerHTML = `<span aria-hidden="true" class="material-symbols-outlined text-lg">${locked ? 'lock' : 'lock_open'}</span>${esc(locked ? tr('lock.tap_unlock') : tr('lock.tap_lock'))}`;
     btn.dataset.locked = String(locked);
   }
 }
@@ -1433,7 +1613,6 @@ function updateFanCard(eid, state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 
   const sliderSection = card.querySelector('[data-slider-section]');
   const hasSlider = sliderSection && sliderSection.querySelector('input[type=range]');
@@ -1492,7 +1671,7 @@ function requestLocationFix() {
     if (!navigator.geolocation) {
       // Geolocation is a secure-context API — over a plain http:// link it is
       // simply absent, which is much the likeliest way to land here.
-      showToast('This control needs your location, which needs a secure (https) link');
+      showToast(tr('location.needs_https'));
       resolve(null);
       return;
     }
@@ -1504,8 +1683,8 @@ function requestLocationFix() {
       }),
       err => {
         showToast(err.code === err.PERMISSION_DENIED
-          ? 'Location permission is needed for this control'
-          : 'Could not get your location — try again');
+          ? tr('location.permission')
+          : tr('location.failed'));
         resolve(null);
       },
       // maximumAge 0 so the device measures now instead of handing back a fix
@@ -1517,9 +1696,34 @@ function requestLocationFix() {
 }
 {% endif %}
 
+// The refusals a gated control repeats to the guest, keyed by the server's
+// exact wording. The server answers in English — a detail is part of the API
+// that scripts and tests read, and a request carries no language worth
+// trusting — so the page translates the ones it knows and shows anything else
+// as it was sent. tests/test_i18n.py checks that each of these is still a
+// message app/routers/guest.py raises, so a reworded refusal cannot silently
+// drop out of translation.
+const SERVER_ERROR_KEYS = {
+  'This control needs your location': 'server.location_needed',
+  'Your location is out of date — try again': 'server.location_stale',
+  "Can't check your location right now": 'server.location_unavailable',
+  'You need to be at the property to use this': 'server.not_at_property',
+  'Too many location checks — please wait a minute': 'server.location_rate_limited',
+  'This control only works when you are on the home network': 'server.home_network_only',
+};
+
+function serverErrorText(detail) {
+  if (typeof detail !== 'string') return '';
+  const key = SERVER_ERROR_KEYS[detail];
+  return key ? tr(key) : detail;
+}
+
 async function sendCmd(entityId, domain, service, extraData = {}) {
   const body = { entity_id: entityId, service: `${domain}.${service}`, data: extraData };
   const gated = requiresLocation(entityId);
+  // Home-network-only controls explain their refusal the same way, so a guest
+  // off the Wi-Fi is told why rather than seeing a bare "Command failed".
+  const localOnly = Boolean(entityMeta[entityId]?.require_local_network);
   if (gated) {
     const fix = await requestLocationFix();
     if (!fix) return;  // requestLocationFix has already said why
@@ -1533,19 +1737,37 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
     });
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
-    if (gated && !r.ok) {
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
+    if (r.status === 403 || r.status === 503) {
+      // Outside the link's access — a weekly window shut, or the schedule
+      // cannot be checked. The page reloads into the countdown rather than
+      // leaving a live-looking control that every tap will refuse.
+      const err = await r.clone().json().catch(() => ({}));
+      if (err.detail && typeof err.detail === 'object' && 'opens_at' in err.detail) {
+        location.reload();
+        return;
+      }
+    }
+    if ((gated || localOnly) && !r.ok) {
       // A gated control's refusal carries a reason worth repeating — "you need
       // to be at the property", "your location is out of date". Every other
       // path keeps the generic message so no endpoint's wording leaks into the
       // guest UI.
       const err = await r.json().catch(() => ({}));
-      showToast(err.detail || 'Command failed');
+      showToast(serverErrorText(err.detail) || tr('command.failed'));
       return;
     }
-    if (r.status === 429) { showToast('Too many requests — slow down'); return; }
-    if (!r.ok) showToast('Command failed');
+    if (r.status === 429) { showToast(tr('command.rate_limited')); return; }
+    if (!r.ok) { showToast(tr('command.failed')); return; }
+    // Present only on a use-limited link. The last use is spent: the server
+    // has already hung up the other tabs on it, and this one says so too.
+    const result = await r.json().catch(() => ({}));
+    if (result.uses_remaining === 0) showExpired('used');
+    else if (typeof result.uses_remaining === 'number') {
+      showToast(trn('command.uses_left', result.uses_remaining));
+    }
   } catch {
-    showToast('You appear to be offline');
+    showToast(tr('command.offline'));
   }
 }
 
@@ -1584,15 +1806,15 @@ function adjustTemp(eid, delta) {
   const unit = states[eid]?.attributes?.temperature_unit || '\u00b0';
   const tgtEl = document.getElementById(`temp-tgt-${cssId(eid)}`);
   const humidity = states[eid]?.attributes?.current_humidity;
-  if (tgtEl) tgtEl.textContent = `Target: ${tempValues[eid]}${unit}${humidity != null ? ` · ${humidity}% humidity` : ''}`;
+  if (tgtEl) tgtEl.textContent = climateTargetText(tempValues[eid], unit, humidity);
   sendCmd(eid, 'climate', 'set_temperature', { temperature: tempValues[eid] });
 }
 
 // ── Lock Confirm (bottom sheet) ──────────────────────────────────────
 function confirmLock(eid, currentlyLocked) {
-  document.getElementById('sheet-title').textContent = currentlyLocked ? 'Unlock door?' : 'Lock door?';
+  document.getElementById('sheet-title').textContent = currentlyLocked ? tr('lock.unlock_title') : tr('lock.lock_title');
   document.getElementById('sheet-body').textContent = currentlyLocked
-    ? 'This will unlock the door.' : 'This will lock the door.';
+    ? tr('lock.unlock_body') : tr('lock.lock_body');
   sheetCallback = () => { sendCmd(eid, 'lock', currentlyLocked ? 'unlock' : 'lock'); closeSheet(); };
   openSheet();
 }
@@ -1698,7 +1920,7 @@ function showSheetWheel(eid) {
   tabs.classList.toggle('hidden', !(wheel && temp));
   tabs.classList.toggle('flex', wheel && temp);
   document.getElementById('sheet-ok').classList.toggle('hidden', Boolean(eid));
-  document.getElementById('sheet-cancel').textContent = eid ? 'Done' : 'Cancel';
+  document.getElementById('sheet-cancel').textContent = eid ? tr('sheet.done') : tr('sheet.cancel');
   if (!eid) {
     document.getElementById('sheet-wheel-wrap').classList.add('hidden');
     document.getElementById('sheet-temp-wrap').classList.add('hidden');
@@ -1713,15 +1935,15 @@ function showSheetWheel(eid) {
 function openColorSheet(eid) {
   document.getElementById('sheet-title').textContent = displayName(eid, states[eid]);
   document.getElementById('sheet-body').textContent = showsColorWheel(eid, states[eid])
-    ? 'Drag the wheel — the light follows as you go.'
-    : 'Slide from warm to cool — the light follows as you go.';
+    ? tr('color.wheel_hint')
+    : tr('color.temp_hint');
   showSheetWheel(eid);
   openSheet();
 }
 
 function confirmLockOpen(eid) {
-  document.getElementById('sheet-title').textContent = 'Open latch?';
-  document.getElementById('sheet-body').textContent = 'This will open the latch.';
+  document.getElementById('sheet-title').textContent = tr('lock.open_title');
+  document.getElementById('sheet-body').textContent = tr('lock.open_body');
   sheetCallback = () => { sendCmd(eid, 'lock', 'open'); closeSheet(); };
   openSheet();
 }
@@ -1976,12 +2198,18 @@ function showInstallBanner() {
   if (!el) return;
 
   if (isIOS) {
-    el.innerHTML = 'Tap <span class="inline-flex items-center align-middle mx-0.5"><span class="material-symbols-outlined text-sm text-accent">ios_share</span></span> then <strong>"Add to Home Screen"</strong> for the best experience.';
+    el.innerHTML = trHtml('install.ios_html', {}, { icon: installIcon('ios_share') });
   } else {
-    el.innerHTML = 'Tap <span class="inline-flex items-center align-middle mx-0.5"><span class="material-symbols-outlined text-sm text-accent">more_vert</span></span> then <strong>"Install app"</strong> or <strong>"Add to Home Screen"</strong>.';
+    el.innerHTML = trHtml('install.android_html', {}, { icon: installIcon('more_vert') });
   }
 
   document.getElementById('install-banner').classList.remove('hidden');
+}
+
+// The browser-menu glyph the install hint points at. Built here rather than in
+// the catalogue so no translation has to carry — or can break — the markup.
+function installIcon(name) {
+  return `<span class="inline-flex items-center align-middle mx-0.5"><span class="material-symbols-outlined text-sm text-accent">${name}</span></span>`;
 }
 
 function dismissInstallBanner() {

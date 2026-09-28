@@ -16,6 +16,11 @@ mapping = {
     'brand_bg': 'BRAND_BG',
     'brand_primary': 'BRAND_PRIMARY',
     'guest_url': 'GUEST_URL',
+    'timezone': 'TIMEZONE',
+    'local_network_cidrs': 'LOCAL_NETWORK_CIDRS',
+    'trusted_proxies': 'TRUSTED_PROXIES',
+    'api_enabled': 'API_ENABLED',
+    'api_token': 'API_TOKEN',
 }
 for key, env in mapping.items():
     val = opts.get(key, '')

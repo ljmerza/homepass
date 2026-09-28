@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{# A device-bound link opened on a device that does not hold it. Deliberately
+   not the expired page: the link is fine, and telling the guest otherwise sends
+   them — and whoever they ask — looking for a date problem that does not exist. #}
+{% block title %}{{ t('page.device_refused.page_title') }} — {{ app_name }}{% endblock %}
+
+{% block head_extra %}
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="{{ brand_bg_dark }}" media="(prefers-color-scheme: dark)">
+{% endblock %}
+
+{% block body_attrs %}class="bg-bg-light dark:bg-bg-dark text-soot dark:text-gray-100 font-sans antialiased min-h-dvh flex items-center justify-center text-center p-8"{% endblock %}
+
+{% block body %}
+  <div class="w-full max-w-xs">
+    <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
+      <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">phonelink_lock</span>
+    </div>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.device_refused.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed mb-4">{{ t('page.device_refused.body') }}</p>
+    <p class="text-muted text-sm leading-relaxed">{{ t('page.device_refused.same_device') }}</p>
+    <p class="text-muted text-sm leading-relaxed mt-4">{{ t('page.device_refused.reset') }}</p>
+    <p class="text-muted text-sm leading-relaxed mt-6">{{ contact_message }}</p>
+  </div>
+{% endblock %}
+
+{% block body_scripts %}
+<script src="{{ base_path }}/static/theme.js?v={{ build_version }}"></script>
+{% endblock %}

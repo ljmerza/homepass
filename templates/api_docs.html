@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ app_name }} API</title>
+<link rel="icon" type="image/png" sizes="192x192" href="{{ base_path }}/static/icons/icon-192.png?v={{ build_version }}">
+{# Swagger UI is fetched and checksummed at image build time (see the
+   Dockerfile), not loaded from a CDN, so this page runs under the same CSP as
+   every other one. No inline script: api_docs.js boots it and reads the schema
+   URL from the data attribute below, which already carries the ingress prefix. #}
+<link rel="stylesheet" href="{{ base_path }}/static/vendor/swagger-ui/swagger-ui.css?v={{ build_version }}">
+</head>
+<body>
+<div id="swagger-ui" data-openapi-url="{{ openapi_url }}"></div>
+<noscript>The API documentation needs JavaScript.</noscript>
+<script src="{{ base_path }}/static/vendor/swagger-ui/swagger-ui-bundle.js?v={{ build_version }}"></script>
+<script src="{{ base_path }}/static/api_docs.js?v={{ build_version }}"></script>
+</body>
+</html>

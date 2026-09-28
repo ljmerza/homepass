@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ app_name }} — Admin{% endblock %}
+{% block title %}{{ app_name }} — {{ t('page.page_title') }}{% endblock %}
 
 {% block head_styles %}
 <style>
@@ -33,13 +33,13 @@
   <div class="absolute top-4 right-4">
     <div class="theme-toggle relative flex bg-soot/[0.04] dark:bg-white/[0.06] rounded-full p-[3px]">
       <div class="theme-slider absolute top-[3px] h-[calc(100%-6px)] rounded-full bg-white dark:bg-white/15 shadow-sm transition-all duration-200 ease-out"></div>
-      <button data-theme="system" data-action="set-theme" aria-label="System theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+      <button data-theme="system" data-action="set-theme" aria-label="{{ t('page.theme.system') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
         <span aria-hidden="true" class="material-symbols-outlined text-[16px]">brightness_auto</span>
       </button>
-      <button data-theme="light" data-action="set-theme" aria-label="Light theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+      <button data-theme="light" data-action="set-theme" aria-label="{{ t('page.theme.light') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
         <span aria-hidden="true" class="material-symbols-outlined text-[16px]">light_mode</span>
       </button>
-      <button data-theme="dark" data-action="set-theme" aria-label="Dark theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+      <button data-theme="dark" data-action="set-theme" aria-label="{{ t('page.theme.dark') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
         <span aria-hidden="true" class="material-symbols-outlined text-[16px]">dark_mode</span>
       </button>
     </div>
@@ -51,25 +51,25 @@
       </div>
     </div>
     <h1 class="text-xl font-serif text-center mb-1">{{ app_name }}</h1>
-    <p class="text-xs text-muted text-center mb-6 font-mono uppercase tracking-widest">Admin Access</p>
+    <p class="text-xs text-muted text-center mb-6 font-mono uppercase tracking-widest">{{ t('page.login.heading') }}</p>
     <div class="space-y-4">
       <div>
-        <label for="l-user" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Username</label>
+        <label for="l-user" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.login.username') }}</label>
         <input id="l-user" type="text" required autocomplete="username"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <div>
-        <label for="l-pass" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Password</label>
+        <label for="l-pass" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.login.password') }}</label>
         <input id="l-pass" type="password" required autocomplete="current-password"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <label class="flex items-center gap-2.5 cursor-pointer">
         <input id="l-remember" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
-        <span class="text-sm">Remember me for a week</span>
+        <span class="text-sm">{{ t('page.login.remember') }}</span>
       </label>
       <div id="l-error" role="alert" class="text-primary text-xs min-h-[18px]"></div>
       <button data-action="do-login" class="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors">
-        Sign in
+        {{ t('page.login.sign_in') }}
       </button>
     </div>
   </div>
@@ -87,19 +87,27 @@
       <div class="flex items-center gap-3">
         <div class="theme-toggle relative flex bg-soot/[0.04] dark:bg-white/[0.06] rounded-full p-[3px]">
           <div class="theme-slider absolute top-[3px] h-[calc(100%-6px)] rounded-full bg-white dark:bg-white/15 shadow-sm transition-all duration-200 ease-out"></div>
-          <button data-theme="system" data-action="set-theme" aria-label="System theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+          <button data-theme="system" data-action="set-theme" aria-label="{{ t('page.theme.system') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[16px]">brightness_auto</span>
           </button>
-          <button data-theme="light" data-action="set-theme" aria-label="Light theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+          <button data-theme="light" data-action="set-theme" aria-label="{{ t('page.theme.light') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[16px]">light_mode</span>
           </button>
-          <button data-theme="dark" data-action="set-theme" aria-label="Dark theme" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
+          <button data-theme="dark" data-action="set-theme" aria-label="{{ t('page.theme.dark') }}" class="theme-btn relative z-10 w-7 h-7 flex items-center justify-center rounded-full">
             <span aria-hidden="true" class="material-symbols-outlined text-[16px]">dark_mode</span>
           </button>
         </div>
+        {% if api_enabled %}
+        <a href="{{ base_path }}/api/docs" target="_blank" rel="noopener" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+          {{ t('page.header.api_docs') }}
+        </a>
+        {% endif %}
+        <button data-action="open-settings-modal" aria-label="{{ t('page.header.settings') }}" title="{{ t('page.header.settings') }}" class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors text-muted">
+          <span aria-hidden="true" class="material-symbols-outlined text-base">tune</span>
+        </button>
         {% if not is_ingress %}
         <button data-action="do-logout" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-          Sign out
+          {{ t('page.header.sign_out') }}
         </button>
         {% endif %}
       </div>
@@ -107,11 +115,20 @@
   </header>
 
   <main class="max-w-4xl mx-auto px-5 py-6">
-    <h2 class="sr-only">Guest Tokens</h2>
+    <h2 class="sr-only">{{ t('page.main.heading') }}</h2>
+    {% if guest_port_unpublished %}
+    <!-- Supervisor says 5880/tcp has no host port, so a direct guest link built
+         here would point at nothing. Said once, up front, rather than on every
+         copy of a link that cannot work. -->
+    <div id="guest-port-warning" role="alert" class="flex items-start gap-2.5 mb-6 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-sm text-amber-700 dark:text-amber-400">
+      <span aria-hidden="true" class="material-symbols-outlined text-lg">link_off</span>
+      <span>{{ t('page.main.port_warning_html') }}</span>
+    </div>
+    {% endif %}
     <!-- Create Token Button -->
     <button data-action="open-create-modal" class="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors flex items-center justify-center gap-2 mb-6 shadow-lg shadow-primary/20">
       <span aria-hidden="true" class="material-symbols-outlined text-lg">add_circle</span>
-      Create Token
+      {{ t('page.main.create_token') }}
     </button>
 
     <!-- Stats Row -->
@@ -119,14 +136,14 @@
       <div class="bg-surface-light dark:bg-surface-dark rounded-xl p-4 border border-border-light dark:border-border-dark shadow-card">
         <div class="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted mb-1">
           <span aria-hidden="true" class="material-symbols-outlined text-base text-ink">verified</span>
-          Active
+          {{ t('page.stats.active') }}
         </div>
         <div class="text-2xl font-serif" id="stat-active">0</div>
       </div>
       <div class="bg-surface-light dark:bg-surface-dark rounded-xl p-4 border border-border-light dark:border-border-dark shadow-card">
         <div class="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted mb-1">
           <span aria-hidden="true" class="material-symbols-outlined text-base text-muted">timer_off</span>
-          Expired
+          {{ t('page.stats.expired') }}
         </div>
         <div class="text-2xl font-serif" id="stat-expired">0</div>
       </div>
@@ -134,25 +151,25 @@
 
     <section class="mb-6" aria-labelledby="activity-heading">
       <div class="flex items-center justify-between mb-3">
-        <h2 id="activity-heading" class="text-xs font-mono uppercase tracking-wider text-muted">Recent Activity</h2>
+        <h2 id="activity-heading" class="text-xs font-mono uppercase tracking-wider text-muted">{{ t('page.activity.heading') }}</h2>
         <div class="flex items-center gap-2">
           <button id="activity-toggle" data-action="toggle-activity" aria-expanded="false" class="hidden h-8 px-3 items-center gap-1 rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors text-xs font-display font-medium">
-            <span id="activity-toggle-label">Show all</span>
+            <span id="activity-toggle-label">{{ t('activity.show_all') }}</span>
             <span id="activity-toggle-icon" aria-hidden="true" class="material-symbols-outlined text-base">expand_more</span>
           </button>
-          <button data-action="refresh-activity" class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors" aria-label="Refresh activity">
+          <button data-action="refresh-activity" class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors" aria-label="{{ t('page.activity.refresh') }}">
             <span aria-hidden="true" class="material-symbols-outlined text-base">refresh</span>
           </button>
         </div>
       </div>
       <ul id="activity-list" role="list" class="space-y-2 list-none">
-        <li class="text-center py-6 text-sm text-muted">Loading...</li>
+        <li class="text-center py-6 text-sm text-muted">{{ t('common.loading') }}</li>
       </ul>
     </section>
 
     <!-- Token List -->
     <ul id="token-grid" role="list" class="space-y-3 list-none">
-      <li class="text-center py-12 text-muted">Loading...</li>
+      <li class="text-center py-12 text-muted">{{ t('common.loading') }}</li>
     </ul>
   </main>
 </div>
@@ -161,72 +178,64 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="create-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
     <div class="flex items-center justify-between mb-5">
-      <h2 id="create-modal-title" class="text-lg font-serif">Create Guest Token</h2>
-      <button data-action="close-modal" data-modal="create" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="create-modal-title" class="text-lg font-serif">{{ t('create.title') }}</h2>
+      <button data-action="close-modal" data-modal="create" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div class="space-y-4">
       <div>
-        <label for="f-label" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Label</label>
-        <input id="f-label" type="text" required placeholder="e.g. Airbnb Guest - John"
+        <label for="f-label" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.label') }}</label>
+        <input id="f-label" type="text" required placeholder="{{ t('page.create.label_placeholder') }}"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <div>
-        <label for="f-slug" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Custom Slug <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
-        <input id="f-slug" type="text" placeholder="Leave blank for random"
+        <label for="f-slug" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.slug') }} <span class="text-muted/60 normal-case tracking-normal">{{ t('common.optional') }}</span></label>
+        <input id="f-slug" type="text" placeholder="{{ t('page.create.slug_placeholder') }}"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-        <p class="text-xs text-muted mt-1">Custom slugs are guessable. Use random slugs for external access.</p>
+        <p class="text-xs text-muted mt-1">{{ t('page.create.slug_hint') }}</p>
       </div>
+      <!-- Filled by timingFormHtml('f'): the same form the Edit Schedule modal
+           uses, so the two cannot drift apart in what a schedule can be. -->
+      <div id="f-timing"></div>
       <div>
-        <label for="f-expiry" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Expiry</label>
-        <select id="f-expiry" data-action="toggle-custom-expiry" data-prefix="f"
-          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
-          <option value="3600">1 hour</option>
-          <option value="43200">12 hours</option>
-          <option value="86400" selected>1 day</option>
-          <option value="259200">3 days</option>
-          <option value="604800">7 days</option>
-          <option value="2592000">30 days</option>
-          <option value="7776000">90 days</option>
-          <option value="31536000">1 year</option>
-          <option value="4102444800">Never expires</option>
-          <option value="custom">Custom...</option>
-        </select>
-        <p id="f-never-warn" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-1">This token grants permanent access until manually revoked.</p>
-        <div id="f-custom-expiry" class="hidden mt-2">
-          <input id="f-custom-datetime" type="datetime-local"
-            class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-          <p id="f-custom-error" class="hidden text-xs text-primary mt-1">Date must be in the future.</p>
-        </div>
-      </div>
-      <div>
-        <label for="f-starts-at" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Valid From <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
-        <input id="f-starts-at" type="datetime-local"
-          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-        <p id="f-starts-at-error" class="hidden text-xs text-primary mt-1">Start date must be in the future.</p>
-        <p class="text-xs text-muted mt-1">Leave blank to start now. The expiry above is counted from this time, so the link can be sent to the guest well before it opens.</p>
-      </div>
-      <div>
-        <label for="f-ip" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">IP Allowlist</label>
+        <label for="f-ip" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.ip_allowlist') }}</label>
         <input id="f-ip" type="text" placeholder="192.168.1.0/24"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <div>
-        <label for="f-pin" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">PIN <span class="text-muted/60 normal-case tracking-normal">(optional, 4-8 digits)</span></label>
-        <input id="f-pin" type="text" inputmode="numeric" maxlength="8" placeholder="Leave blank for no PIN"
-          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-        <p class="text-xs text-muted mt-1">Guests must enter this before the link shows anything.</p>
+        <label for="f-countries" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.countries') }} <span class="text-muted/60 normal-case tracking-normal">{{ t('common.optional') }}</span></label>
+        <input id="f-countries" type="text" placeholder="{{ 'GB, IE' if geoip_available else t('page.create.geoip_missing') }}" {{ '' if geoip_available else 'disabled' }}
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono uppercase outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+        <p class="text-xs text-muted mt-1">{{ t('page.create.countries_hint') }} <a class="underline" href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a>.</p>
       </div>
       <div>
-        <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Entities</label>
+        <label for="f-pin" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.pin') }} <span class="text-muted/60 normal-case tracking-normal">{{ t('page.create.pin_optional') }}</span></label>
+        <input id="f-pin" type="text" inputmode="numeric" maxlength="8" placeholder="{{ t('page.create.pin_placeholder') }}"
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <p class="text-xs text-muted mt-1">{{ t('page.create.pin_hint') }}</p>
+        <label class="flex items-center gap-2.5 cursor-pointer mt-3">
+          <input id="f-remember-pin" type="checkbox" checked class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+          <span class="text-sm">{{ t('page.pin.remember') }}</span>
+        </label>
+        <p class="text-xs text-muted mt-1 ml-6.5">{{ t('page.create.remember_pin_hint') }}</p>
+      </div>
+      <div>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input id="f-device-binding" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+          <span class="text-sm">{{ t('page.create.device_binding') }}</span>
+        </label>
+        <p class="text-xs text-muted mt-1 ml-6.5">{{ t('page.create.device_binding_hint_html') }}</p>
+      </div>
+      <div>
+        <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.create.entities') }}</label>
         <div id="create-picker"></div>
       </div>
     </div>
     <div id="create-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="create" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button data-action="submit-create" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Create</button>
+      <button data-action="close-modal" data-modal="create" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-create" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.create.submit') }}</button>
     </div>
   </div>
 </div>
@@ -235,44 +244,52 @@
 <div class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="entity-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-md shadow-xl" role="dialog" aria-modal="true" aria-labelledby="entity-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="entity-modal-title" class="text-lg font-serif">Entity settings</h2>
-      <button data-action="close-modal" data-modal="entity" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="entity-modal-title" class="text-lg font-serif">{{ t('page.entity.title') }}</h2>
+      <button data-action="close-modal" data-modal="entity" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div id="entity-modal-eid" class="text-[11px] text-muted font-mono mb-4 truncate"></div>
 
-    <label class="block text-xs font-display font-semibold mb-1.5" for="entity-display-name">Display name</label>
+    <label class="block text-xs font-display font-semibold mb-1.5" for="entity-display-name">{{ t('page.entity.display_name') }}</label>
     <input id="entity-display-name" type="text" maxlength="64"
       class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary"
       placeholder="">
-    <p class="text-[11px] text-muted mt-1.5">Shown to the guest instead of the Home Assistant name. Leave blank to use <span id="entity-fallback-name" class="font-medium"></span>.</p>
+    <p class="text-[11px] text-muted mt-1.5">{{ t('page.entity.display_name_hint_html') }}</p>
 
     <div id="entity-light-options" class="mt-4 hidden">
       <label class="flex items-center gap-2.5 cursor-pointer">
         <input id="entity-show-brightness" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
-        <span class="text-sm">Show brightness slider</span>
+        <span class="text-sm">{{ t('page.entity.show_brightness') }}</span>
       </label>
-      <p class="text-[11px] text-muted mt-1.5 ml-6.5">Off by default — the guest gets on/off only.</p>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.show_brightness_hint') }}</p>
       <label class="flex items-center gap-2.5 cursor-pointer mt-3">
         <input id="entity-show-color" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
-        <span class="text-sm">Show colour controls</span>
+        <span class="text-sm">{{ t('page.entity.show_color') }}</span>
       </label>
-      <p class="text-[11px] text-muted mt-1.5 ml-6.5">Also off by default. The guest gets a colour wheel, a warm-cool slider, or both — whichever Home Assistant reports the light supports.</p>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.show_color_hint') }}</p>
     </div>
 
     <div id="entity-proximity" class="mt-4 pt-4 border-t border-border-light dark:border-border-dark">
       <label class="flex items-center gap-2.5 cursor-pointer">
         <input id="entity-require-proximity" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
-        <span class="text-sm">Require the guest to be at the property</span>
+        <span class="text-sm">{{ t('page.entity.require_proximity') }}</span>
       </label>
-      <p class="text-[11px] text-muted mt-1.5 ml-6.5">Off by default. The guest's browser is asked for its location when they press this one control, and the command only goes through if that position falls inside Home Assistant's <span class="font-mono">zone.home</span>. Everything else on the link is unaffected.</p>
-      <p class="text-[11px] text-muted mt-1.5 ml-6.5">The guest link must be served over HTTPS — browsers withhold location on plain HTTP and the control will refuse. The position is self-reported by the browser, so treat this as a deterrent for a casual guest, not proof anyone is really there.</p>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.require_proximity_hint_html') }}</p>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.require_proximity_https') }}</p>
+    </div>
+
+    <div id="entity-local-network" class="mt-4 pt-4 border-t border-border-light dark:border-border-dark hidden">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="entity-require-local-network" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">{{ t('page.entity.local_network') }}</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.local_network_hint_html') }}</p>
     </div>
 
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="entity" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button data-action="submit-entity-meta" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Apply</button>
+      <button data-action="close-modal" data-modal="entity" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-entity-meta" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.entity.apply') }}</button>
     </div>
   </div>
 </div>
@@ -283,22 +300,22 @@
 <div class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="template-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="template-modal-title" class="text-lg font-serif">Save Entity Template</h2>
-      <button data-action="close-modal" data-modal="template" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="template-modal-title" class="text-lg font-serif">{{ t('page.template.title') }}</h2>
+      <button data-action="close-modal" data-modal="template" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div id="template-modal-count" class="text-sm text-muted mb-4"></div>
 
-    <label class="block text-xs font-display font-semibold mb-1.5" for="template-name">Name</label>
-    <input id="template-name" type="text" maxlength="64" placeholder="e.g. Ground floor"
+    <label class="block text-xs font-display font-semibold mb-1.5" for="template-name">{{ t('page.template.name') }}</label>
+    <input id="template-name" type="text" maxlength="64" placeholder="{{ t('page.template.name_placeholder') }}"
       class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary">
-    <p class="text-[11px] text-muted mt-1.5">Saves which entities are selected, nothing else — display names, light options and the location requirement stay with the token they were set on. Loading a template later <span class="font-medium">adds</span> its entities to whatever is already selected.</p>
+    <p class="text-[11px] text-muted mt-1.5">{{ t('page.template.hint_html') }}</p>
 
     <div id="template-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-3 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="template" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button data-action="submit-template" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+      <button data-action="close-modal" data-modal="template" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-template" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.save') }}</button>
     </div>
   </div>
 </div>
@@ -307,8 +324,8 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="edit-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="edit-modal-title" class="text-lg font-serif">Edit Entities</h2>
-      <button data-action="close-modal" data-modal="edit" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="edit-modal-title" class="text-lg font-serif">{{ t('page.edit.title') }}</h2>
+      <button data-action="close-modal" data-modal="edit" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
@@ -316,8 +333,8 @@
     <div id="edit-picker"></div>
     <div id="edit-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="edit" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button data-action="submit-edit" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+      <button data-action="close-modal" data-modal="edit" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-edit" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.save') }}</button>
     </div>
   </div>
 </div>
@@ -326,39 +343,39 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="extend-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-labelledby="extend-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="extend-modal-title" class="text-lg font-serif">Extend Expiry</h2>
-      <button data-action="close-modal" data-modal="extend" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="extend-modal-title" class="text-lg font-serif">{{ t('extend.title_extend') }}</h2>
+      <button data-action="close-modal" data-modal="extend" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div id="extend-token-label" class="text-sm text-muted mb-4"></div>
     <div>
-      <label for="extend-duration" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">New Expiry (From Now)</label>
+      <label for="extend-duration" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.extend.new_expiry') }}</label>
       <select id="extend-duration" data-action="toggle-custom-expiry" data-prefix="extend"
         class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
-        <option value="3600">1 hour</option>
-        <option value="43200">12 hours</option>
-        <option value="86400" selected>1 day</option>
-        <option value="259200">3 days</option>
-        <option value="604800">7 days</option>
-        <option value="2592000">30 days</option>
-        <option value="7776000">90 days</option>
-        <option value="31536000">1 year</option>
-        <option value="4102444800">Never expires</option>
-        <option value="custom">Custom...</option>
+        <option value="3600">{{ t('duration.1h') }}</option>
+        <option value="43200">{{ t('page.duration.12h') }}</option>
+        <option value="86400" selected>{{ t('duration.1d') }}</option>
+        <option value="259200">{{ t('duration.3d') }}</option>
+        <option value="604800">{{ t('duration.7d') }}</option>
+        <option value="2592000">{{ t('duration.30d') }}</option>
+        <option value="7776000">{{ t('page.duration.90d') }}</option>
+        <option value="31536000">{{ t('page.duration.1y') }}</option>
+        <option value="4102444800">{{ t('page.duration.never') }}</option>
+        <option value="custom">{{ t('page.duration.custom') }}</option>
       </select>
-      <p class="text-xs text-muted mt-1">Replaces the current expiry with a new one from now.</p>
-      <p id="extend-never-warn" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-1">This token grants permanent access until manually revoked.</p>
+      <p class="text-xs text-muted mt-1">{{ t('page.extend.hint') }}</p>
+      <p id="extend-never-warn" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-1">{{ t('timing.never_warn') }}</p>
       <div id="extend-custom-expiry" class="hidden mt-2">
         <input id="extend-custom-datetime" type="datetime-local"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-        <p id="extend-custom-error" class="hidden text-xs text-primary mt-1">Date must be in the future.</p>
+        <p id="extend-custom-error" class="hidden text-xs text-primary mt-1">{{ t('page.extend.custom_error') }}</p>
       </div>
     </div>
     <div id="extend-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="extend" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button id="extend-submit-btn" data-action="submit-extend" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Extend</button>
+      <button data-action="close-modal" data-modal="extend" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button id="extend-submit-btn" data-action="submit-extend" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('action.extend') }}</button>
     </div>
   </div>
 </div>
@@ -367,23 +384,116 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="pin-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-labelledby="pin-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="pin-modal-title" class="text-lg font-serif">PIN Protection</h2>
-      <button data-action="close-modal" data-modal="pin" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 id="pin-modal-title" class="text-lg font-serif">{{ t('page.pin.title') }}</h2>
+      <button data-action="close-modal" data-modal="pin" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div id="pin-token-label" class="text-sm text-muted mb-1"></div>
     <div id="pin-current-state" class="text-xs text-muted mb-4"></div>
     <div>
-      <label for="pin-input-field" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">New PIN <span class="text-muted/60 normal-case tracking-normal">(4-8 digits, blank to remove)</span></label>
-      <input id="pin-input-field" type="text" inputmode="numeric" maxlength="8" placeholder="e.g. 4821"
+      <label for="pin-input-field" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.pin.new') }} <span class="text-muted/60 normal-case tracking-normal">{{ t('page.pin.new_hint') }}</span></label>
+      <input id="pin-input-field" type="text" inputmode="numeric" maxlength="8" placeholder="{{ t('page.pin.placeholder') }}"
         class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
     </div>
-    <p class="text-xs text-muted/70 mt-2">PINs are stored hashed and can never be shown again. Saving a new PIN — or removing one — signs out every guest who had already entered the old one.</p>
+    <p class="text-xs text-muted/70 mt-2">{{ t('page.pin.hashed_hint') }}</p>
     <div id="pin-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
-      <button data-action="close-modal" data-modal="pin" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button data-action="submit-pin" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+      <button data-action="close-modal" data-modal="pin" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-pin" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.save') }}</button>
+    </div>
+
+    <div class="mt-4 pt-4 border-t border-border-light dark:border-border-dark">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="pin-remember-field" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">{{ t('page.pin.remember') }}</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.pin.remember_hint') }}</p>
+    </div>
+
+    <div id="pin-links-section" class="hidden mt-4 pt-4 border-t border-border-light dark:border-border-dark">
+      <div class="text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.links.heading') }}</div>
+      <p class="text-[11px] text-muted mb-3">{{ t('page.links.hint') }}</p>
+      <ul id="pin-links-list" class="space-y-2 mb-3"></ul>
+      <div class="flex gap-2">
+        <label for="pin-link-label" class="sr-only">{{ t('page.links.label_sr') }}</label>
+        <input id="pin-link-label" type="text" maxlength="64" placeholder="{{ t('page.links.label_placeholder') }}"
+          class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <button data-action="create-access-link" class="px-3 py-2 text-xs font-display font-semibold rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">add_link</span> {{ t('page.links.new') }}
+        </button>
+      </div>
+      <div id="pin-link-new" class="hidden mt-3 p-3 rounded-xl bg-ink/5 border border-ink/20">
+        <div class="text-[11px] text-muted mb-1">{{ t('page.links.new_once') }}</div>
+        <div id="pin-link-new-url" class="text-xs font-mono break-all mb-2"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="pin-link-new-copy" data-action="copy-url"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> {{ t('links.copy') }}
+          </button>
+          <button id="pin-link-new-qr" data-action="show-access-link-qr"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> {{ t('links.qr') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Schedule Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="schedule-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+    <div class="flex items-center justify-between mb-3">
+      <h2 id="schedule-modal-title" class="text-lg font-serif">{{ t('page.schedule.title') }}</h2>
+      <button data-action="close-modal" data-modal="schedule" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <div id="schedule-token-label" class="text-sm text-muted mb-4"></div>
+    <div id="s-timing"></div>
+    <label id="s-reset-uses-wrap" class="hidden mt-3 flex items-center gap-2.5 cursor-pointer">
+      <input id="s-reset-uses" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+      <span class="text-sm">{{ t('page.schedule.reset_uses') }} <span id="s-uses-now" class="text-muted"></span></span>
+    </label>
+    <p class="text-xs text-muted mt-3">{{ t('page.schedule.hint') }}</p>
+    <div id="schedule-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-3 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="schedule" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-schedule" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.save') }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="settings-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="flex items-center justify-between mb-3">
+      <h2 id="settings-modal-title" class="text-lg font-serif">{{ t('page.header.settings') }}</h2>
+      <button data-action="close-modal" data-modal="settings" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    {# Not one of SETTINGS_FIELDS: those are the deployment's, shared by every
+       admin and saved on the server. The language is this browser's own
+       preference — see setAdminLanguage() below. #}
+    <div class="mb-4 pb-4 border-b border-border-light dark:border-border-dark">
+      <label for="set-language" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">{{ t('page.lang.label') }}</label>
+      <select id="set-language"
+        class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
+        <option value="auto"{% if not admin_lang_pin %} selected{% endif %}>{{ t('page.lang.auto') }}</option>
+        {% for code, name in admin_languages %}
+        <option value="{{ code }}" lang="{{ code }}"{% if admin_lang_pin == code %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-[11px] text-muted mt-1">{{ t('page.lang.hint') }}</p>
+    </div>
+    <p class="text-xs text-muted mb-4">{{ t('page.settings.hint') }}</p>
+    <div id="settings-fields" class="space-y-4"></div>
+    <div id="settings-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="settings" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button data-action="submit-settings" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.save') }}</button>
     </div>
   </div>
 </div>
@@ -395,26 +505,27 @@
     <h2 class="text-lg font-serif mb-2" id="confirm-title"></h2>
     <p class="text-sm text-muted mb-5" id="confirm-body"></p>
     <div class="flex gap-2 justify-center">
-      <button data-action="close-modal" data-modal="confirm" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button id="confirm-ok" data-action="confirm-ok" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Confirm</button>
+      <button data-action="close-modal" data-modal="confirm" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">{{ t('page.common.cancel') }}</button>
+      <button id="confirm-ok" data-action="confirm-ok" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">{{ t('page.common.confirm') }}</button>
     </div>
   </div>
 </div>
 
 <!-- QR Code Modal -->
-<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="qr-modal" role="dialog" aria-modal="true" aria-label="QR Code">
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="qr-modal" role="dialog" aria-modal="true" aria-label="{{ t('page.qr.title') }}">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl text-center">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-serif">QR Code</h2>
-      <button data-action="close-modal" data-modal="qr" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <h2 class="text-lg font-serif">{{ t('page.qr.title') }}</h2>
+      <button data-action="close-modal" data-modal="qr" aria-label="{{ t('page.common.close_dialog') }}" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <canvas id="qr-canvas" width="256" height="256" class="mx-auto mb-3"></canvas>
+    <p id="qr-note" class="hidden text-xs text-amber-600 dark:text-amber-400 mb-2"></p>
     <a id="qr-url" target="_blank" rel="noopener noreferrer"
        class="block text-xs text-muted hover:text-primary font-mono break-all mb-4 underline decoration-dotted underline-offset-2 transition-colors"></a>
     <button id="qr-copy-btn" data-action="copy-url" class="w-full py-2.5 rounded-xl border border-border-light dark:border-border-dark text-sm font-display font-medium hover:bg-soot/5 dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-1.5">
-      <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Copy Link
+      <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> {{ t('page.qr.copy') }}
     </button>
   </div>
 </div>
@@ -428,13 +539,25 @@
 <script src="{{ base_path }}/static/domains.js?v={{ build_version }}"></script>
 <script src="{{ base_path }}/static/theme.js?v={{ build_version }}"></script>
 <script nonce="{{ csp_nonce }}">
+// The dashboard's language and its strings, read by tr()/trn() in util.js.
+// First, so every line below — top-level constants included — can use them.
+const I18N = {{ i18n | tojson }};
 const BASE = '{{ base_path }}';
 const IS_INGRESS = {{ 'true' if is_ingress else 'false' }};
-const GUEST_URL = '{{ guest_url }}';
+// tojson rather than a quoted interpolation: these are JavaScript literals,
+// and HTML-escaping a value is not the same as making it safe inside one.
+const GUEST_URL = {{ guest_url|tojson }};
+// The add-on's published Network port on the HA host, as Supervisor reports it.
+// Only filled in for the sidebar without a Guest URL, the one case that needs it.
+const DIRECT_GUEST_BASE = {{ direct_guest_base|tojson }};
+// The add-on's home-network ranges. Empty means the "only from the home
+// network" gate is off, and the dashboard neither offers nor pre-ticks it.
+const LOCAL_NETWORKS = {{ local_networks | tojson }};
+const LOCAL_NETWORK_CONFIGURED = LOCAL_NETWORKS.length > 0;
 
 function guestLink(slug) {
   if (GUEST_URL) return `${GUEST_URL}/g/${slug}`;
-  if (IS_INGRESS) return `http://homeassistant.local:5880/g/${slug}`;
+  if (IS_INGRESS) return `${DIRECT_GUEST_BASE || 'http://homeassistant.local:5880'}/g/${slug}`;
   return `${location.origin}/g/${slug}`;
 }
 let allEntities = [];
@@ -488,8 +611,8 @@ async function doLogin() {
       body: JSON.stringify({username: user, password: pass, remember})
     });
     if (r.ok) showApp();
-    else document.getElementById('l-error').textContent = 'Invalid credentials.';
-  } catch { document.getElementById('l-error').textContent = 'Connection error.'; }
+    else document.getElementById('l-error').textContent = tr('login.invalid');
+  } catch { document.getElementById('l-error').textContent = tr('login.connection_error'); }
 }
 
 async function doLogout() {
@@ -508,6 +631,7 @@ function showApp() {
   loadActivity();
   loadEntities();
   loadTemplates();
+  loadTimezone();
   startAutoRefresh();
   requestAnimationFrame(updateThemeToggles);
 }
@@ -539,26 +663,33 @@ function renderActivity() {
   if (!activity.length) {
     toggle.classList.add('hidden');
     toggle.classList.remove('inline-flex');
-    list.innerHTML = `<li class="text-center py-6 text-sm text-muted">No activity yet</li>`;
+    list.innerHTML = `<li class="text-center py-6 text-sm text-muted">${esc(tr('activity.none'))}</li>`;
     return;
   }
   const canExpand = activity.length > ACTIVITY_COLLAPSED_COUNT;
   toggle.classList.toggle('hidden', !canExpand);
   toggle.classList.toggle('inline-flex', canExpand);
   toggle.setAttribute('aria-expanded', activityExpanded ? 'true' : 'false');
-  toggleLabel.textContent = activityExpanded ? 'Show less' : 'Show all';
+  toggleLabel.textContent = activityExpanded ? tr('activity.show_less') : tr('activity.show_all');
   toggleIcon.textContent = activityExpanded ? 'expand_less' : 'expand_more';
   const visibleActivity = activityExpanded ? activity : activity.slice(0, ACTIVITY_COLLAPSED_COUNT);
   list.innerHTML = visibleActivity.map(a => {
     const isCommand = a.activity === 'command';
-    const icon = isCommand ? 'touch_app' : 'link';
-    const tokenLabel = a.token_label || 'Deleted token';
+    const tokenLabel = a.token_label || tr('activity.deleted_token');
+    // Device-lock events read as what happened to the link, not as an open:
+    // a refusal logged as "opened link" is how a link eaten by the wrong
+    // device used to look exactly like one nobody had tried.
+    const deviceTitles = {
+      device_bound: ['phonelink_lock', esc(tr('activity.device_bound', { label: tokenLabel }))],
+      device_refused: ['block', esc(tr('activity.device_refused', { label: tokenLabel }))],
+    };
+    const icon = isCommand ? 'touch_app' : (deviceTitles[a.activity] || ['link'])[0];
     const title = isCommand
-      ? `${esc(tokenLabel)} used ${esc(a.service || 'command')}`
-      : `${esc(tokenLabel)} opened link`;
+      ? esc(tr('activity.used', { label: tokenLabel, service: a.service || tr('activity.command') }))
+      : (deviceTitles[a.activity] || [null, esc(tr('activity.opened', { label: tokenLabel }))])[1];
     const detail = isCommand && a.target_entity_id
       ? esc(a.target_entity_id)
-      : (a.ip_address ? esc(a.ip_address) : 'Guest page');
+      : (a.ip_address ? esc(a.ip_address) : esc(tr('activity.guest_page')));
     return `<li class="bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-xl px-4 py-3 shadow-card">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-full ${isCommand ? 'bg-accent/15 text-accent' : 'bg-ink/10 text-ink'} flex items-center justify-center flex-shrink-0">
@@ -568,7 +699,7 @@ function renderActivity() {
           <div class="text-sm font-medium truncate">${title}</div>
           <div class="text-xs text-muted font-mono truncate">${detail}</div>
         </div>
-        <time class="text-xs text-muted font-mono flex-shrink-0" datetime="${new Date(a.timestamp * 1000).toISOString()}">${relativeTime(a.timestamp)}</time>
+        <time class="text-xs text-muted font-mono flex-shrink-0" datetime="${new Date(a.timestamp * 1000).toISOString()}">${esc(relativeTime(a.timestamp))}</time>
       </div>
     </li>`;
   }).join('');
@@ -581,6 +712,9 @@ function toggleActivity() {
 
 function tokenStatus(t) {
   if (t.revoked) return 'revoked';
+  // A use-limited link with nothing left is as dead as an expired one, and
+  // Renew is what brings it back.
+  if (t.uses_remaining === 0) return 'used';
   const now = Date.now() / 1000;
   // Checked before expiry so a scheduled token reads as scheduled rather than
   // expiring, and after revoked because revoking one settles the question.
@@ -591,21 +725,26 @@ function tokenStatus(t) {
   return 'active';
 }
 
+// Short relative times — "in 9d", "8h ago" — in the dashboard's language. Each
+// is a whole phrase with the number inside it, not a number glued to an
+// English unit: "hace 8 h" puts the unit after the number and the direction
+// before it, which no suffix scheme can produce. Returns text, not markup; the
+// callers escape it.
 function relativeTime(ts) {
-  if (ts >= NEVER_EXPIRES) return 'Never';
+  if (ts >= NEVER_EXPIRES) return tr('rel.never');
   const now = Date.now() / 1000;
   const diff = ts - now;
   if (diff < 0) {
     const ago = Math.abs(diff);
-    if (ago < 60) return 'just now';
-    if (ago < 3600) return `${Math.floor(ago/60)}m ago`;
-    if (ago < 86400) return `${Math.floor(ago/3600)}h ago`;
-    return `${Math.floor(ago/86400)}d ago`;
+    if (ago < 60) return tr('rel.just_now');
+    if (ago < 3600) return tr('rel.minutes_ago', { n: Math.floor(ago/60) });
+    if (ago < 86400) return tr('rel.hours_ago', { n: Math.floor(ago/3600) });
+    return tr('rel.days_ago', { n: Math.floor(ago/86400) });
   }
-  if (diff < 60) return 'in <1m';
-  if (diff < 3600) return `in ${Math.floor(diff/60)}m`;
-  if (diff < 86400) return `in ${Math.floor(diff/3600)}h`;
-  return `in ${Math.floor(diff/86400)}d`;
+  if (diff < 60) return tr('rel.in_under_minute');
+  if (diff < 3600) return tr('rel.in_minutes', { n: Math.floor(diff/60) });
+  if (diff < 86400) return tr('rel.in_hours', { n: Math.floor(diff/3600) });
+  return tr('rel.in_days', { n: Math.floor(diff/86400) });
 }
 
 function updateStats() {
@@ -626,13 +765,13 @@ function renderTokens() {
   if (!tokens.length) {
     grid.innerHTML = `<li class="text-center py-16">
       <span aria-hidden="true" class="material-symbols-outlined text-5xl text-muted/30 mb-3 block">token</span>
-      <h3 class="text-base font-serif mb-1">No tokens yet</h3>
-      <p class="text-sm text-muted">Create a token to give guests temporary access.</p>
+      <h3 class="text-base font-serif mb-1">${esc(tr('tokens.none_title'))}</h3>
+      <p class="text-sm text-muted">${esc(tr('tokens.none_body'))}</p>
     </li>`;
     return;
   }
 
-  const order = { active: 0, expiring: 1, scheduled: 2, expired: 3, revoked: 4 };
+  const order = { active: 0, expiring: 1, scheduled: 2, used: 3, expired: 4, revoked: 5 };
   const sorted = [...tokens].sort((a, b) => order[tokenStatus(a)] - order[tokenStatus(b)]);
 
   grid.innerHTML = sorted.map(t => {
@@ -641,18 +780,22 @@ function renderTokens() {
     // Scheduled gets the full card: the link is real, so copying it, showing
     // its QR and editing it all still make sense before it opens.
     const isActive = status === 'active' || status === 'expiring' || status === 'scheduled';
-    const lastAccess = t.last_accessed ? relativeTime(t.last_accessed) : 'Never';
+    const lastAccess = t.last_accessed ? relativeTime(t.last_accessed) : tr('rel.never');
 
     const badges = {
-      active: { label: 'Active', icon: 'circle', dotClass: 'pulse-dot text-ink', bgClass: 'bg-ink/10 text-ink' },
-      expiring: { label: 'Expiring', icon: 'schedule', dotClass: 'text-amber-600', bgClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-      scheduled: { label: 'Scheduled', icon: 'event_upcoming', dotClass: 'text-violet-500', bgClass: 'bg-violet-500/10 text-violet-500' },
-      expired: { label: 'Expired', icon: 'timer_off', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
-      revoked: { label: 'Revoked', icon: 'block', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
+      active: { label: tr('badge.active'), icon: 'circle', dotClass: 'pulse-dot text-ink', bgClass: 'bg-ink/10 text-ink' },
+      expiring: { label: tr('badge.expiring'), icon: 'schedule', dotClass: 'text-amber-600', bgClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+      scheduled: { label: tr('badge.scheduled'), icon: 'event_upcoming', dotClass: 'text-violet-500', bgClass: 'bg-violet-500/10 text-violet-500' },
+      used: { label: tr('badge.used'), icon: 'task_alt', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
+      expired: { label: tr('badge.expired'), icon: 'timer_off', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
+      revoked: { label: tr('badge.revoked'), icon: 'block', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
     };
     const badge = badges[status];
-    const expiryAction = status === 'expired' || status === 'revoked' ? 'Renew' : 'Extend';
-    const expiryIcon = expiryAction === 'Renew' ? 'autorenew' : 'update';
+    // Decided on the status, then named: the label is translated, and a
+    // comparison against its English text would stop matching in Spanish.
+    const renews = status === 'expired' || status === 'revoked' || status === 'used';
+    const expiryAction = renews ? tr('action.renew') : tr('action.extend');
+    const expiryIcon = renews ? 'autorenew' : 'update';
 
     const stripClass = status === 'active' ? 'from-ink to-blue-400'
       : status === 'expiring' ? 'from-accent to-amber-400'
@@ -668,7 +811,7 @@ function renderTokens() {
               <span class="font-serif text-sm truncate">${esc(t.label)}</span>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${badge.bgClass}">
                 <span aria-hidden="true" class="material-symbols-outlined text-xs ${badge.dotClass}">${badge.icon}</span>
-                ${badge.label}
+                ${esc(badge.label)}
               </span>
             </div>
             <div class="text-xs text-muted font-mono flex items-center gap-1">
@@ -676,13 +819,13 @@ function renderTokens() {
             </div>
           </div>
           <div class="flex gap-1.5 flex-shrink-0">
-            <button data-id="${esc(t.id)}" data-action="duplicate-token" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Duplicate">
+            <button data-id="${esc(t.id)}" data-action="duplicate-token" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="${esc(tr('action.duplicate'))}">
               <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span>
             </button>
-            <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-action="open-extend-modal" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors" title="${expiryAction}">
+            <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-action="open-extend-modal" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors" title="${esc(expiryAction)}">
               <span aria-hidden="true" class="material-symbols-outlined text-sm">${expiryIcon}</span>
             </button>
-            <button data-id="${esc(t.id)}" data-action="confirm-delete" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title="Delete">
+            <button data-id="${esc(t.id)}" data-action="confirm-delete" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title="${esc(tr('action.delete'))}">
               <span aria-hidden="true" class="material-symbols-outlined text-sm">delete</span>
             </button>
           </div>
@@ -698,7 +841,7 @@ function renderTokens() {
           <div class="flex-1 min-w-0">
             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${badge.bgClass} mb-2">
               <span aria-hidden="true" class="material-symbols-outlined text-xs ${badge.dotClass}">${badge.icon}</span>
-              ${badge.label}
+              ${esc(badge.label)}
             </span>
             <h3 class="text-lg font-serif truncate">${esc(t.label)}</h3>
             <div class="text-xs text-muted font-mono flex items-center gap-1 mt-0.5">
@@ -710,15 +853,23 @@ function renderTokens() {
         <div class="grid grid-cols-2 gap-x-4 gap-y-2 mb-4 text-sm">
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">devices</span>
-            <span>${esc(String(t.entity_count))} entities</span>
+            <span>${esc(trn('card.entities', t.entity_count))}</span>
           </div>
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">timer</span>
-            <span>Expires ${relativeTime(t.expires_at)}</span>
+            <span>${esc(tr('card.expires', { when: relativeTime(t.expires_at) }))}</span>
           </div>
           ${status === 'scheduled' ? `<div class="flex items-center gap-2 text-violet-500">
             <span aria-hidden="true" class="material-symbols-outlined text-base">hourglass_top</span>
-            <span>Starts ${relativeTime(t.starts_at)}</span>
+            <span>${esc(tr('card.starts', { when: relativeTime(t.starts_at) }))}</span>
+          </div>` : ''}
+          ${t.max_uses != null ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">confirmation_number</span>
+            <span>${esc(trn('card.uses_left', t.max_uses, { left: t.uses_remaining }))}</span>
+          </div>` : ''}
+          ${t.access_windows ? `<div class="col-span-2 flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">date_range</span>
+            <span class="truncate" title="${esc(windowsSummary(t.access_windows))}">${esc(windowsSummary(t.access_windows))}</span>
           </div>` : ''}
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">history</span>
@@ -726,52 +877,84 @@ function renderTokens() {
           </div>
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">lan</span>
-            <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : 'Any IP'}</span>
+            <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : esc(tr('card.any_ip'))}</span>
           </div>
+          ${t.country_allowlist ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">public</span>
+            <span>${esc(t.country_allowlist.join(', '))}</span>
+          </div>` : ''}
+          ${t.device_binding ? `<div class="flex items-center gap-2 ${t.device_bound_at ? 'text-ink' : 'text-muted'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">${t.device_bound_at ? 'phonelink_lock' : 'smartphone'}</span>
+            <span>${esc(t.device_bound_at ? tr('card.device_bound', { when: relativeTime(t.device_bound_at) }) : tr('card.device_awaiting'))}</span>
+          </div>` : ''}
         </div>
 
         <div class="grid grid-cols-3 gap-2">
           <button data-url="${esc(url)}" data-action="copy-url"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Copy
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> ${esc(tr('action.copy'))}
           </button>
           <button data-url="${esc(url)}" data-action="show-qr"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> ${esc(tr('action.qr'))}
           </button>
           <button data-id="${esc(t.id)}" data-action="open-edit-modal"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit</span> Edit
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit</span> ${esc(tr('action.edit'))}
           </button>
         </div>
         <div class="grid grid-cols-3 gap-2 mt-2">
           <button data-id="${esc(t.id)}" data-action="duplicate-token"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Duplicate
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> ${esc(tr('action.duplicate'))}
           </button>
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-action="open-extend-modal"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">${expiryIcon}</span> ${expiryAction}
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${expiryIcon}</span> ${esc(expiryAction)}
           </button>
           <button data-id="${esc(t.id)}" data-action="confirm-revoke"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium text-primary border border-primary/20 hover:bg-primary/10 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">block</span> Revoke
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">block</span> ${esc(tr('action.revoke'))}
           </button>
         </div>
-        <div class="grid grid-cols-2 gap-2 mt-2">
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="open-schedule-modal"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="${esc(tr('action.schedule_title'))}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit_calendar</span> ${esc(tr('action.schedule'))}
+          </button>
           <button data-id="${esc(t.id)}" data-action="confirm-rotate"
-            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Issue a new link and retire this one">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">autorenew</span> Rotate Link
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="${esc(tr('action.rotate_title'))}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">autorenew</span> ${esc(tr('action.rotate'))}
           </button>
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="open-pin-modal"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border transition-colors ${t.has_pin ? 'border-ink/30 text-ink bg-ink/10 hover:bg-ink/20' : 'border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5'}">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.has_pin ? 'lock' : 'lock_open'}</span> ${t.has_pin ? 'PIN Protected' : 'Add PIN'}
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.has_pin ? 'lock' : 'lock_open'}</span> ${esc(t.has_pin ? tr('action.pin_protected') : tr('action.add_pin'))}
           </button>
+        </div>
+        ${t.has_pin ? `<div class="grid grid-cols-2 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="copy-link-without-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="${esc(tr('action.copy_without_pin_title'))}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key_off</span> ${esc(tr('links.copy'))}
+          </button>
+          <button data-id="${esc(t.id)}" data-action="qr-without-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="${esc(tr('action.qr_without_pin_title'))}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> ${esc(tr('links.qr'))}
+          </button>
+        </div>` : ''}
+        <div class="grid ${t.device_binding ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-enabled="${t.device_binding ? 'true' : 'false'}" data-action="confirm-device-binding"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border transition-colors ${t.device_binding ? 'border-ink/30 text-ink bg-ink/10 hover:bg-ink/20' : 'border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.device_binding ? 'phonelink_lock' : 'smartphone'}</span> ${esc(t.device_binding ? tr('action.one_device') : tr('action.lock_device'))}
+          </button>
+          ${t.device_binding ? `<button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-unbind" ${t.device_bound_at ? '' : 'disabled'}
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors disabled:opacity-40 disabled:pointer-events-none" title="${esc(tr('action.unbind_title'))}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">link_off</span> ${esc(tr('action.unbind'))}
+          </button>` : ''}
         </div>
         ${status === 'scheduled' ? `<div class="mt-2">
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-activate"
             class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">play_circle</span> Activate Now
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">play_circle</span> ${esc(tr('action.activate'))}
           </button>
         </div>` : ''}
       </div>
@@ -813,6 +996,21 @@ async function loadTemplates() {
 // sensors never reach the command handler the proximity check lives in, so the
 // toggle is hidden rather than offered and then quietly ignored.
 const PROXIMITY_EXEMPT_DOMAINS = ['sensor', 'binary_sensor', 'camera', 'schedule'];
+
+// Access-type domains — the ones that open something physical. With a home
+// network configured, adding one of these to a link ticks "only from the home
+// network" for it, so the add-on option does what its description says without
+// the admin hunting for the toggle on every lock. It is only a default: untick
+// it per entity to let a trusted guest open the garage from the road.
+const LOCAL_NETWORK_DEFAULT_DOMAINS = ['lock', 'cover', 'button', 'input_button'];
+
+function applyEntityDefaults(pickerState, entityId) {
+  if (!LOCAL_NETWORK_CONFIGURED || pickerState.meta[entityId]) return;
+  if (!LOCAL_NETWORK_DEFAULT_DOMAINS.includes(entityId.split('.')[0])) return;
+  pickerState.meta[entityId] = {
+    display_name: null, options: null, require_proximity: false, require_local_network: true,
+  };
+}
 
 // ── Entity Picker Component ───────────────────────────────────────────
 // Derived from DOMAIN_ORDER so a domain added in domains.js gets a chip
@@ -876,31 +1074,43 @@ function renderPicker(containerId, pickerState) {
   container.innerHTML = `
     <div class="mb-3">
       <div class="flex items-center justify-between mb-1.5 px-1">
-        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">Templates</span>
+        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">${esc(tr('picker.templates'))}</span>
         <button type="button" data-action="open-template-modal" data-container="${containerId}"
           class="inline-flex items-center gap-1 text-[11px] font-display font-medium text-accent hover:underline">
-          <span aria-hidden="true" class="material-symbols-outlined text-sm">bookmark_add</span> Save selection
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">bookmark_add</span> ${esc(tr('picker.save_selection'))}
         </button>
       </div>
       ${entityTemplates.length ? `<div class="flex flex-wrap gap-1.5">
         ${entityTemplates.map(t => `<span role="button" tabindex="0" data-action="template-load" data-container="${containerId}" data-template="${esc(t.id)}"
-          title="Add ${esc(String(t.entity_ids.length))} ${t.entity_ids.length === 1 ? 'entity' : 'entities'} to the selection"
+          title="${esc(trn('picker.template_add', t.entity_ids.length))}"
           class="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-full text-xs font-display font-medium border border-border-light dark:border-border-dark text-muted hover:border-accent dark:hover:border-accent cursor-pointer transition-colors">
           <span aria-hidden="true" class="material-symbols-outlined text-sm">bookmark</span>
           ${esc(t.name)} <span class="font-mono text-[10px] opacity-60">${esc(String(t.entity_ids.length))}</span>
           <button type="button" data-action="template-delete" data-template="${esc(t.id)}" data-name="${esc(t.name)}"
-            aria-label="Delete template ${esc(t.name)}"
+            aria-label="${esc(tr('picker.template_delete', { name: t.name }))}"
             class="w-5 h-5 flex items-center justify-center rounded-full hover:bg-primary/10 text-primary transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined" style="font-size:14px">close</span>
           </button>
         </span>`).join('')}
-      </div>` : `<p class="text-[11px] text-muted px-1">No saved templates yet. Pick some entities, then Save selection.</p>`}
+      </div>` : `<p class="text-[11px] text-muted px-1">${esc(tr('picker.no_templates'))}</p>`}
     </div>
+    ${containerId === 'create-picker' ? `
+    <div class="mb-3">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted px-1 mr-1">${esc(tr('picker.suggest'))}</span>
+        ${SUGGESTIONS.map(sg => `<button type="button" data-action="picker-suggest" data-container="${containerId}" data-category="${sg.category}"
+          title="${esc(sg.title)}"
+          class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-display font-medium border border-dashed border-border-light dark:border-border-dark text-muted hover:border-accent dark:hover:border-accent transition-colors">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">${PICKER_ICONS[sg.icon] || 'devices'}</span>
+          ${esc(sg.label)}
+        </button>`).join('')}
+      </div>
+    </div>` : ''}
     ${labelsAvailable && allLabels.length ? `
     <div class="mb-3">
-      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">Labels</div>
+      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">${esc(tr('picker.labels'))}</div>
       <div class="flex flex-wrap gap-1.5">
-        ${[{ label_id: '', name: 'All labels' }, ...allLabels].map(l => `<button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-display font-medium border transition-colors
+        ${[{ label_id: '', name: tr('picker.all_labels') }, ...allLabels].map(l => `<button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-display font-medium border transition-colors
           ${pickerState.label === l.label_id
             ? 'bg-accent text-white border-accent'
             : 'border-border-light dark:border-border-dark text-muted hover:border-accent dark:hover:border-accent'}"
@@ -917,18 +1127,20 @@ function renderPicker(containerId, pickerState) {
           : 'border-border-light dark:border-border-dark text-muted hover:border-accent dark:hover:border-accent'}"
         data-action="picker-filter" data-container="${containerId}" data-domain="${d}">
         <span aria-hidden="true" class="material-symbols-outlined text-sm">${PICKER_ICONS[d] || 'devices'}</span>
-        ${DOMAIN_LABELS[d] || (d === 'all' ? 'All' : d === 'media_player' ? 'Media' : d.charAt(0).toUpperCase() + d.slice(1))}
+        ${esc(d === 'all' ? tr('picker.all') : domainLabel(d))}
       </button>`).join('')}
     </div>
     <div class="relative mb-3">
       <span aria-hidden="true" class="material-symbols-outlined text-muted absolute left-3 top-1/2 -translate-y-1/2 text-lg">search</span>
       <input class="w-full pl-10 pr-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary"
-        type="text" placeholder="Search entities..." value="${esc(pickerState.search)}"
+        type="text" placeholder="${esc(tr('picker.search'))}" value="${esc(pickerState.search)}"
         data-action="picker-search" data-container="${containerId}">
     </div>
     ${allSelected.length ? `
     <div class="mb-3">
-      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">Selected (${selected.length === allSelected.length ? allSelected.length : `${selected.length} of ${allSelected.length}`})</div>
+      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">${esc(selected.length === allSelected.length
+        ? tr('picker.selected', { count: allSelected.length })
+        : tr('picker.selected_filtered', { shown: selected.length, total: allSelected.length }))}</div>
       <ul class="picker-list max-h-44 overflow-y-auto border border-border-light dark:border-border-dark rounded-xl bg-surface-light dark:bg-surface-dark list-none" role="list">
         ${selected.map(e => {
           const m = pickerState.meta[e.entity_id] || {};
@@ -936,39 +1148,41 @@ function renderPicker(containerId, pickerState) {
           const showsBrightness = m.options && m.options.show_brightness;
           const showsColor = m.options && m.options.show_color;
           const gated = m.require_proximity;
-          return `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-edit" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="Edit ${esc(renamed || e.friendly_name || e.entity_id)}">
+          const localOnly = LOCAL_NETWORK_CONFIGURED && m.require_local_network;
+          return `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-edit" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="${esc(tr('picker.edit', { name: renamed || e.friendly_name || e.entity_id }))}">
           <div class="w-7 h-7 rounded-full ${DOMAIN_COLORS[e.domain]?.icon || 'bg-gray-500'} flex items-center justify-center flex-shrink-0">
             <span aria-hidden="true" class="material-symbols-outlined text-white text-sm">${PICKER_ICONS[e.domain] || 'devices'}</span>
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate flex items-center gap-1.5">
               ${esc(renamed || e.friendly_name || e.entity_id)}
-              ${renamed ? '<span aria-hidden="true" class="material-symbols-outlined text-accent" style="font-size:14px" title="Renamed">edit</span>' : ''}
-              ${showsBrightness ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Brightness slider shown">brightness_high</span>' : ''}
-              ${showsColor ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Colour controls shown">palette</span>' : ''}
-              ${gated ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="Guest must be at the property">location_on</span>' : ''}
+              ${renamed ? '<span aria-hidden="true" class="material-symbols-outlined text-accent" style="font-size:14px" title="' + esc(tr('picker.renamed')) + '">edit</span>' : ''}
+              ${showsBrightness ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="' + esc(tr('picker.brightness_shown')) + '">brightness_high</span>' : ''}
+              ${showsColor ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="' + esc(tr('picker.color_shown')) + '">palette</span>' : ''}
+              ${gated ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="' + esc(tr('picker.gated')) + '">location_on</span>' : ''}
+              ${localOnly ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="' + esc(tr('picker.local_only')) + '">wifi_lock</span>' : ''}
             </div>
             <div class="text-[11px] text-muted font-mono truncate">${esc(e.entity_id)}</div>
           </div>
           <button type="button" data-action="picker-remove" data-container="${containerId}" data-entity="${esc(e.entity_id)}"
-            aria-label="Remove ${esc(e.friendly_name || e.entity_id)}"
+            aria-label="${esc(tr('picker.remove', { name: e.friendly_name || e.entity_id }))}"
             class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary flex-shrink-0 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-lg">remove_circle</span>
           </button>
         </li>`; }).join('')}
-        ${!selected.length ? `<li class="px-3 py-4 text-center text-xs text-muted">No selected entities match this filter</li>` : ''}
+        ${!selected.length ? `<li class="px-3 py-4 text-center text-xs text-muted">${esc(tr('picker.no_selected_match'))}</li>` : ''}
       </ul>
     </div>` : ''}
     <div class="mb-2">
       <div class="flex items-center justify-between mb-1.5 px-1">
-        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">Available (${available.length})</span>
+        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">${esc(tr('picker.available', { count: available.length }))}</span>
         ${narrowed && available.length ? `<button type="button" data-action="picker-add-all" data-container="${containerId}"
           class="inline-flex items-center gap-1 text-[11px] font-display font-medium text-accent hover:underline">
-          <span aria-hidden="true" class="material-symbols-outlined text-sm">library_add</span> Add all ${available.length}
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">library_add</span> ${esc(tr('picker.add_all', { count: available.length }))}
         </button>` : ''}
       </div>
       <ul class="picker-list max-h-44 overflow-y-auto border border-border-light dark:border-border-dark rounded-xl bg-surface-light dark:bg-surface-dark list-none" role="list">
-        ${available.slice(0, 100).map(e => `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-add" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="Add ${esc(e.friendly_name || e.entity_id)}">
+        ${available.slice(0, 100).map(e => `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-add" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="${esc(tr('picker.add', { name: e.friendly_name || e.entity_id }))}">
           <div class="w-7 h-7 rounded-full ${(DOMAIN_COLORS[e.domain]?.icon || 'bg-gray-500')}/20 flex items-center justify-center flex-shrink-0">
             <span aria-hidden="true" class="material-symbols-outlined text-sm" style="color: var(--tw-text-opacity)">${PICKER_ICONS[e.domain] || 'devices'}</span>
           </div>
@@ -978,11 +1192,11 @@ function renderPicker(containerId, pickerState) {
           </div>
           <span aria-hidden="true" class="material-symbols-outlined text-accent text-lg flex-shrink-0">add_circle</span>
         </li>`).join('')}
-        ${available.length > 100 ? `<li class="px-3 py-2.5 text-center text-xs text-muted">...and ${available.length - 100} more. Use search to filter.</li>` : ''}
-        ${!available.length ? `<li class="px-3 py-4 text-center text-xs text-muted">No matching entities</li>` : ''}
+        ${available.length > 100 ? `<li class="px-3 py-2.5 text-center text-xs text-muted">${esc(tr('picker.more', { count: available.length - 100 }))}</li>` : ''}
+        ${!available.length ? `<li class="px-3 py-4 text-center text-xs text-muted">${esc(tr('picker.no_match'))}</li>` : ''}
       </ul>
     </div>
-    <div class="text-xs text-muted text-right mt-1 font-mono">${pickerState.selected.size} selected</div>`;
+    <div class="text-xs text-muted text-right mt-1 font-mono">${esc(tr('picker.count_selected', { count: pickerState.selected.size }))}</div>`;
 }
 
 function getPickerState(containerId) {
@@ -1012,6 +1226,7 @@ function setPickerSearch(containerId, val) {
 
 function pickerAdd(containerId, entityId) {
   getPickerState(containerId).selected.add(entityId);
+  applyEntityDefaults(getPickerState(containerId), entityId);
   renderPicker(containerId, getPickerState(containerId));
 }
 
@@ -1034,9 +1249,53 @@ function pickerAddAll(containerId) {
   // rendering limit and a bulk add that honoured it would silently miss the
   // rest of a large label.
   const toAdd = pickerFiltered(pickerState).filter(e => !pickerState.selected.has(e.entity_id));
-  toAdd.forEach(e => pickerState.selected.add(e.entity_id));
+  toAdd.forEach(e => {
+    pickerState.selected.add(e.entity_id);
+    applyEntityDefaults(pickerState, e.entity_id);
+  });
   renderPicker(containerId, pickerState);
-  if (toAdd.length) showToast(`Added ${toAdd.length} ${toAdd.length === 1 ? 'entity' : 'entities'}`, 'success');
+  if (toAdd.length) showToast(trn('picker.added', toAdd.length), 'success');
+}
+
+// ── Suggestions ───────────────────────────────────────────────────────
+// Opt-in starting points for the create picker: nothing is selected until the
+// admin presses a chip, and pressing one only adds to the selection — the same
+// additive rule templates follow, and the token is still only what is saved.
+// The matching lives on the server (/admin/ha/suggested-entities) next to the
+// domain allowlist it must stay inside.
+const SUGGESTIONS = [
+  { category: 'access', label: tr('suggest.access'), icon: 'lock',
+    title: tr('suggest.access_title'), none: tr('suggest.none_access') },
+  { category: 'lights', label: tr('suggest.lights'), icon: 'light',
+    title: tr('suggest.lights_title'), none: tr('suggest.none_lights') },
+];
+
+async function suggestInto(containerId, category) {
+  const sg = SUGGESTIONS.find(x => x.category === category);
+  if (!sg) return;
+  const r = await fetch(`${BASE}/admin/ha/suggested-entities?categories=${encodeURIComponent(category)}`);
+  if (!r.ok) { showToast(tr('suggest.failed'), 'error'); return; }
+  const suggested = await r.json();
+  const pickerState = getPickerState(containerId);
+  // Only what the picker itself lists, so a suggestion can never put an entity
+  // on a token that the picker would not have offered by hand.
+  const known = new Set(allEntities.map(e => e.entity_id));
+  let added = 0;
+  suggested.forEach(({ entity_id }) => {
+    if (known.has(entity_id) && !pickerState.selected.has(entity_id)) {
+      pickerState.selected.add(entity_id);
+      // Same defaults as adding by hand or from a template, so a lock the
+      // "Doors & locks" chip adds is home-network-only exactly as it would be
+      // had the admin ticked it themselves.
+      applyEntityDefaults(pickerState, entity_id);
+      added++;
+    }
+  });
+  renderPicker(containerId, pickerState);
+  if (added) showToast(trn('suggest.added', added), 'success');
+  // A whole sentence per chip rather than its label lower-cased into one:
+  // "no new {label}" only reads right in English.
+  else showToast(sg.none, 'success');
 }
 
 // ── Entity Template Actions ───────────────────────────────────────────
@@ -1053,20 +1312,23 @@ function loadTemplateInto(containerId, templateId) {
     // An entity renamed or removed in HA since the template was saved would
     // otherwise be put on a token that can never render or command it.
     if (!known.has(eid)) { missing++; return; }
-    if (!pickerState.selected.has(eid)) { pickerState.selected.add(eid); added++; }
+    if (!pickerState.selected.has(eid)) {
+      pickerState.selected.add(eid);
+      applyEntityDefaults(pickerState, eid);
+      added++;
+    }
   });
   renderPicker(containerId, pickerState);
 
-  const skipped = missing ? `, ${missing} no longer in Home Assistant` : '';
-  if (added) showToast(`Added ${added} from "${tpl.name}"${skipped}`, 'success');
-  else showToast(`"${tpl.name}" is already selected${skipped}`, missing ? 'error' : 'success');
+  const skipped = missing ? tr('template.missing', { n: missing }) : '';
+  if (added) showToast(tr('template.added', { n: added, name: tpl.name, skipped }), 'success');
+  else showToast(tr('template.already', { name: tpl.name, skipped }), missing ? 'error' : 'success');
 }
 
 function openTemplateModal(containerId) {
   templateModalContainer = containerId;
   const count = getPickerState(containerId).selected.size;
-  document.getElementById('template-modal-count').textContent =
-    `${count} ${count === 1 ? 'entity' : 'entities'} selected.`;
+  document.getElementById('template-modal-count').textContent = trn('template.count', count);
   document.getElementById('template-name').value = '';
   document.getElementById('template-error').textContent = '';
   openModal('template-modal');
@@ -1079,9 +1341,9 @@ async function submitTemplate() {
   const containerId = templateModalContainer;
   const errEl = document.getElementById('template-error');
   const name = document.getElementById('template-name').value.trim();
-  if (!name) { errEl.textContent = 'Name is required.'; return; }
+  if (!name) { errEl.textContent = tr('template.name_required'); return; }
   const entityIds = [...getPickerState(containerId).selected];
-  if (!entityIds.length) { errEl.textContent = 'Select at least one entity first.'; return; }
+  if (!entityIds.length) { errEl.textContent = tr('template.select_first'); return; }
 
   const r = await fetch(`${BASE}/admin/templates`, {
     method: 'POST',
@@ -1090,48 +1352,390 @@ async function submitTemplate() {
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
-    errEl.textContent = typeof err.detail === 'string' ? err.detail : 'Error saving template.';
+    errEl.textContent = typeof err.detail === 'string' ? err.detail : tr('template.save_error');
     return;
   }
   closeTemplateModal();
   await loadTemplates();
   renderPicker(containerId, getPickerState(containerId));
-  showToast('Template saved', 'success');
+  showToast(tr('template.saved'), 'success');
 }
 
 function confirmDeleteTemplate(templateId, name) {
-  openConfirmModal('Delete Template', `"${name}" will be removed. Tokens already created from it are unaffected.`, async () => {
+  openConfirmModal(tr('template.delete_title'), tr('template.delete_body', { name }), async () => {
     const r = await fetch(`${BASE}/admin/templates/${templateId}`, { method: 'DELETE' });
-    if (!r.ok) { showToast('Failed to delete template', 'error'); return; }
+    if (!r.ok) { showToast(tr('template.delete_failed'), 'error'); return; }
     await loadTemplates();
     // Whichever picker is on screen; both read the same entityTemplates list.
     ['create-picker', 'edit-picker'].forEach(id => {
       if (document.getElementById(id).innerHTML) renderPicker(id, getPickerState(id));
     });
-    showToast('Template deleted', 'success');
+    showToast(tr('template.deleted'), 'success');
   });
 }
 
+// ── Token timing form ─────────────────────────────────────────────────
+// One form, rendered into both the create modal (prefix "f") and the Edit
+// Schedule modal (prefix "s"), with three modes:
+//   single_use — a use limit, with an optional last day;
+//   never      — no expiry at all;
+//   period     — a start and an end, and optionally weekly windows inside it.
+// Ends are always sent as an absolute expires_at. A duration would be anchored
+// server-side to the start, which is right for "3 days" and wrong for a date
+// the admin picked on a calendar.
+const WEEKDAY_LABELS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(d => tr(`weekday.${d}`));
+const MAX_USES_CAP = 1000;
+// The zone weekly windows are evaluated in, from /admin/timezone.
+let houseZone = null;
+// Weekly windows being edited, per form prefix: [{weekdays, start, end}]
+const timingWindows = { f: [], s: [] };
+
+const TIMING_INPUT = 'w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+
+function timingModeCard(p, mode, title, hint) {
+  return `<label class="flex items-start gap-2 p-2.5 rounded-xl border border-border-light dark:border-border-dark cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+    <input type="radio" name="${p}-timing-mode" id="${p}-mode-${mode}" value="${mode}" data-action="timing-mode" data-prefix="${p}" class="mt-0.5 accent-primary">
+    <span>
+      <span class="block text-sm font-display font-medium">${title}</span>
+      <span class="block text-xs text-muted">${hint}</span>
+    </span>
+  </label>`;
+}
+
+function timingFormHtml(p) {
+  const quick = [[tr('duration.1h'), 3600], [tr('duration.1d'), 86400], [tr('duration.3d'), 259200],
+    [tr('duration.7d'), 604800], [tr('duration.30d'), 2592000]];
+  return `<label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">${esc(tr('timing.access'))}</label>
+    <div class="space-y-2">
+      ${timingModeCard(p, 'single_use', esc(tr('timing.single_use')), esc(tr('timing.single_use_hint')))}
+      ${timingModeCard(p, 'never', esc(tr('timing.never')), esc(tr('timing.never_hint')))}
+      ${timingModeCard(p, 'period', esc(tr('timing.period')), esc(tr('timing.period_hint')))}
+    </div>
+    <div id="${p}-single-fields" class="hidden space-y-2 mt-3">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="${p}-uses" class="block text-xs text-muted mb-1">${esc(tr('timing.uses'))}</label>
+          <input id="${p}-uses" type="number" min="1" max="${MAX_USES_CAP}" step="1" value="1" class="${TIMING_INPUT}">
+        </div>
+        <div>
+          <label for="${p}-single-end" class="block text-xs text-muted mb-1">${esc(tr('timing.valid_until'))} <span class="text-muted/60">${esc(tr('common.optional'))}</span></label>
+          <input id="${p}-single-end" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+      </div>
+      <p class="text-xs text-muted">${esc(tr('timing.single_use_detail'))}</p>
+    </div>
+    <p id="${p}-never-fields" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-2">${esc(tr('timing.never_warn'))}</p>
+    <div id="${p}-period-fields" class="hidden space-y-2 mt-3">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="${p}-start" class="block text-xs text-muted mb-1">${esc(tr('timing.starts'))} <span class="text-muted/60">${esc(tr('timing.blank_now'))}</span></label>
+          <input id="${p}-start" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+        <div>
+          <label for="${p}-end" class="block text-xs text-muted mb-1">${esc(tr('timing.ends'))}</label>
+          <input id="${p}-end" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${quick.map(([label, secs]) => `<button type="button" data-action="timing-quick" data-prefix="${p}" data-seconds="${secs}"
+          class="px-2.5 py-1 text-[11px] font-display font-medium rounded-full border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">+${esc(label)}</button>`).join('')}
+      </div>
+      <p class="text-xs text-muted">${esc(tr('timing.countdown_hint'))}</p>
+      <label class="flex items-center gap-2 text-xs text-muted pt-1 cursor-pointer">
+        <input type="checkbox" id="${p}-advanced" data-action="timing-advanced" data-prefix="${p}" class="accent-primary">
+        ${esc(tr('timing.advanced'))}
+      </label>
+      <div id="${p}-advanced-fields" class="hidden space-y-2 pl-3 border-l-2 border-border-light dark:border-border-dark">
+        <p class="text-xs text-muted">${trHtml('timing.advanced_hint_html', {}, { zone: `<span id="${p}-tz" class="font-mono"></span>` })}</p>
+        <div id="${p}-windows" class="space-y-2"></div>
+        <button type="button" data-action="window-add" data-prefix="${p}"
+          class="flex items-center gap-1 px-2.5 py-1 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">add</span> ${esc(tr('timing.add_window'))}
+        </button>
+      </div>
+    </div>
+`;
+}
+
+function renderWindows(p) {
+  const list = timingWindows[p];
+  document.getElementById(`${p}-windows`).innerHTML = list.map((w, i) => `<div class="p-2 rounded-xl border border-border-light dark:border-border-dark space-y-2" data-window-row="${i}">
+      <div class="flex flex-wrap gap-1">
+        ${WEEKDAY_LABELS.map((d, day) => {
+          const on = w.weekdays.includes(day);
+          return `<button type="button" data-action="window-day" data-prefix="${p}" data-index="${i}" data-day="${day}" aria-pressed="${on}"
+            class="px-2 py-1 text-[11px] font-mono rounded-lg border transition-colors ${on ? 'border-primary bg-primary/10 text-primary' : 'border-border-light dark:border-border-dark text-muted'}">${esc(d)}</button>`;
+        }).join('')}
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="time" data-window-start value="${esc(w.start)}" aria-label="${esc(tr('timing.start_time'))}" class="flex-1 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary">
+        <span class="text-muted text-xs">${esc(tr('timing.to'))}</span>
+        <input type="time" data-window-end value="${esc(w.end)}" aria-label="${esc(tr('timing.end_time'))}" class="flex-1 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary">
+        <button type="button" data-action="window-remove" data-prefix="${p}" data-index="${i}" aria-label="${esc(tr('timing.remove_window'))}"
+          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted">
+          <span aria-hidden="true" class="material-symbols-outlined text-base">delete</span>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+// Pull typed times back into state before a re-render throws the inputs away.
+function syncWindowsFromDom(p) {
+  const rows = document.getElementById(`${p}-windows`).querySelectorAll('[data-window-row]');
+  rows.forEach(row => {
+    const w = timingWindows[p][parseInt(row.dataset.windowRow, 10)];
+    if (!w) return;
+    w.start = row.querySelector('[data-window-start]').value;
+    w.end = row.querySelector('[data-window-end]').value;
+  });
+}
+
+function addWindow(p) {
+  syncWindowsFromDom(p);
+  timingWindows[p].push({ weekdays: [], start: '09:00', end: '17:00' });
+  renderWindows(p);
+}
+function removeWindow(p, i) {
+  syncWindowsFromDom(p);
+  timingWindows[p].splice(i, 1);
+  renderWindows(p);
+}
+function toggleWindowDay(p, i, day) {
+  syncWindowsFromDom(p);
+  const w = timingWindows[p][i];
+  if (!w) return;
+  w.weekdays = w.weekdays.includes(day) ? w.weekdays.filter(d => d !== day) : [...w.weekdays, day].sort();
+  renderWindows(p);
+}
+
+function setTimingMode(p, mode) {
+  document.getElementById(`${p}-mode-${mode}`).checked = true;
+  document.getElementById(`${p}-single-fields`).classList.toggle('hidden', mode !== 'single_use');
+  document.getElementById(`${p}-never-fields`).classList.toggle('hidden', mode !== 'never');
+  document.getElementById(`${p}-period-fields`).classList.toggle('hidden', mode !== 'period');
+}
+
+function setAdvanced(p, on) {
+  document.getElementById(`${p}-advanced`).checked = on;
+  document.getElementById(`${p}-advanced-fields`).classList.toggle('hidden', !on);
+  if (on && !timingWindows[p].length) addWindow(p);
+}
+
+// "+3 days" is measured from the start when there is one, like the server
+// measures a duration — so a stay booked for next week ends three days after
+// check-in, not three days from today.
+function applyQuickEnd(p, seconds) {
+  const startVal = document.getElementById(`${p}-start`).value;
+  const start = startVal ? new Date(startVal).getTime() : NaN;
+  const anchor = !isNaN(start) && start > Date.now() ? start : Date.now();
+  document.getElementById(`${p}-end`).value = toLocalInput((anchor / 1000) + seconds);
+}
+
+function toLocalInput(epochSeconds) {
+  const d = new Date(epochSeconds * 1000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+// The form's starting values for a token: what it is now for an edit, and a
+// copy for the next guest for a duplicate. A copy keeps the shape of the
+// access — the mode, the use limit, the weekly times, and how long it lasts —
+// and drops the dates themselves, which belonged to the last booking the way
+// its slug and PIN did. Pure, so the node harness can test it.
+function timingPresetFromToken(token, nowMs, forDuplicate) {
+  const now = Math.floor(nowMs / 1000);
+  const windows = (token.access_windows || []).map(w => ({
+    weekdays: [...w.weekdays],
+    start: w.start,
+    // A time input cannot show 24:00; 00:00 as an end means the same thing.
+    end: w.end === '24:00' ? '00:00' : w.end,
+  }));
+  const mode = token.max_uses != null ? 'single_use'
+    : windows.length ? 'period'
+    : token.expires_at >= NEVER_EXPIRES ? 'never'
+    : 'period';
+  const never = token.expires_at >= NEVER_EXPIRES;
+  const preset = { mode, uses: token.max_uses || 1, windows, advanced: windows.length > 0, start: '', end: '', singleEnd: '' };
+  if (forDuplicate) {
+    const began = token.starts_at || token.created_at;
+    const length = Math.max(3600, token.expires_at - began);
+    if (!never) {
+      preset.end = toLocalInput(now + length);
+      preset.singleEnd = preset.end;
+    }
+  } else {
+    if (token.starts_at && token.starts_at > now) preset.start = toLocalInput(token.starts_at);
+    if (!never) {
+      preset.end = toLocalInput(token.expires_at);
+      preset.singleEnd = preset.end;
+    }
+  }
+  if (!preset.end) preset.end = toLocalInput(now + 86400);
+  return preset;
+}
+
+function setTimingForm(p, preset = {}) {
+  timingWindows[p] = (preset.windows || []).map(w => ({ ...w, weekdays: [...w.weekdays] }));
+  renderWindows(p);
+  document.getElementById(`${p}-uses`).value = String(preset.uses || 1);
+  document.getElementById(`${p}-single-end`).value = preset.singleEnd || '';
+  document.getElementById(`${p}-start`).value = preset.start || '';
+  document.getElementById(`${p}-end`).value = preset.end || toLocalInput(Date.now() / 1000 + 86400);
+  document.getElementById(`${p}-tz`).textContent = houseZone || tr('timing.zone_unknown');
+  setTimingMode(p, preset.mode || 'period');
+  setAdvanced(p, !!preset.advanced);
+}
+
+function readTimingForm(p) {
+  syncWindowsFromDom(p);
+  const form = {
+    mode: document.querySelector(`input[name="${p}-timing-mode"]:checked`)?.value || 'period',
+    uses: document.getElementById(`${p}-uses`).value,
+    singleEnd: document.getElementById(`${p}-single-end`).value,
+    start: document.getElementById(`${p}-start`).value,
+    end: document.getElementById(`${p}-end`).value,
+    advanced: document.getElementById(`${p}-advanced`).checked,
+    windows: timingWindows[p],
+  };
+  return buildTimingBody(form, Date.now());
+}
+
+// Turn the form's raw values into the API's timing fields, or an error.
+// Pure — no DOM — so the node harness can drive it directly.
+function buildTimingBody(form, nowMs) {
+  const now = Math.floor(nowMs / 1000);
+  const toEpoch = v => Math.floor(new Date(v).getTime() / 1000);
+  if (form.mode === 'never') {
+    return { body: { starts_at: null, expires_at: NEVER_EXPIRES, access_windows: null, max_uses: null } };
+  }
+  if (form.mode === 'single_use') {
+    const uses = Number(form.uses);
+    if (!Number.isInteger(uses) || uses < 1 || uses > MAX_USES_CAP) {
+      return { error: tr('timing.err_uses', { max: MAX_USES_CAP }) };
+    }
+    let end = NEVER_EXPIRES;
+    if (form.singleEnd) {
+      end = toEpoch(form.singleEnd);
+      if (isNaN(end) || end <= now) return { error: tr('timing.err_end_future') };
+    }
+    return { body: { starts_at: null, expires_at: end, access_windows: null, max_uses: uses } };
+  }
+
+  // A start already in the past means "now" — the server folds it the same
+  // way — so an edit of a live token does not trip over its own start time.
+  let start = null;
+  if (form.start) {
+    start = toEpoch(form.start);
+    if (isNaN(start)) return { error: tr('timing.err_start') };
+    if (start <= now) start = null;
+  }
+  if (!form.end) return { error: tr('timing.err_no_end') };
+  const end = toEpoch(form.end);
+  if (isNaN(end) || end <= now) return { error: tr('timing.err_end_future') };
+  if (start && end <= start) return { error: tr('timing.err_end_after') };
+
+  let windows = null;
+  if (form.advanced) {
+    if (!form.windows.length) return { error: tr('timing.err_no_windows') };
+    windows = [];
+    for (const w of form.windows) {
+      if (!w.weekdays.length) return { error: tr('timing.err_no_days') };
+      if (!w.start || !w.end) return { error: tr('timing.err_window_times') };
+      // 00:00 as an end is midnight at the close of the day, which the API
+      // spells 24:00 — and 00:00-00:00 is then a whole day, not an empty one.
+      const endHm = w.end === '00:00' ? '24:00' : w.end;
+      if (w.start === endHm) return { error: tr('timing.err_window_same') };
+      windows.push({ weekdays: [...w.weekdays].sort(), start: w.start, end: endHm });
+    }
+  }
+  return { body: { starts_at: start, expires_at: end, access_windows: windows, max_uses: null } };
+}
+
+// "Tue, Thu 09:00–13:00 · Fri 22:00–02:00" for a token card.
+function windowsSummary(windows) {
+  return (windows || []).map(w =>
+    `${w.weekdays.map(d => WEEKDAY_LABELS[d]).join(', ')} ${w.start}–${w.end === '24:00' ? '24:00' : w.end}`
+  ).join(' · ');
+}
+
+async function loadTimezone() {
+  try {
+    const r = await fetch(`${BASE}/admin/timezone`);
+    if (r.ok) houseZone = (await r.json()).timezone;
+  } catch {}
+}
+
+// ── Edit Schedule Modal ───────────────────────────────────────────────
+let scheduleTokenId = null;
+
+async function openScheduleModal(tokenId) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
+  if (!r.ok) { showToast(tr('token.load_failed'), 'error'); return; }
+  const token = await r.json();
+  scheduleTokenId = tokenId;
+  document.getElementById('schedule-token-label').textContent = token.label;
+  document.getElementById('schedule-error').textContent = '';
+  setTimingForm('s', timingPresetFromToken(token, Date.now(), false));
+  const limited = token.max_uses != null;
+  document.getElementById('s-reset-uses-wrap').classList.toggle('hidden', !limited);
+  document.getElementById('s-reset-uses').checked = false;
+  document.getElementById('s-uses-now').textContent = limited ? tr('schedule.uses_now', { used: token.use_count, max: token.max_uses }) : '';
+  openModal('schedule-modal');
+}
+function closeScheduleModal() { closeModal('schedule-modal'); scheduleTokenId = null; }
+
+async function submitSchedule() {
+  if (!scheduleTokenId) return;
+  const errEl = document.getElementById('schedule-error');
+  const timing = readTimingForm('s');
+  if (timing.error) { errEl.textContent = timing.error; return; }
+  const r = await fetch(`${BASE}/admin/tokens/${scheduleTokenId}/schedule`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ ...timing.body, reset_uses: document.getElementById('s-reset-uses').checked }),
+  });
+  if (r.ok) {
+    closeScheduleModal();
+    showToast(tr('schedule.updated'), 'success');
+    loadTokens();
+  } else {
+    const err = await r.json().catch(() => ({}));
+    errEl.textContent = typeof err.detail === 'string' ? err.detail : tr('schedule.error');
+  }
+}
+
+document.getElementById('f-timing').innerHTML = timingFormHtml('f');
+document.getElementById('s-timing').innerHTML = timingFormHtml('s');
+
 // ── Create Token Modal ────────────────────────────────────────────────
 function openCreateModal(preset = {}) {
-  createPicker = { selected: new Set(preset.entityIds || []), filter: 'all', label: '', search: '', meta: {} };
-  document.getElementById('create-modal-title').textContent = preset.title || 'Create Guest Token';
+  // A duplicate's per-entity overrides come along with its entities. They hold
+  // the proximity and home-network requirements, which are access controls:
+  // a copy that dropped them would be a looser link than the one it was made
+  // from, with nothing on the form to say so. Copied, so editing the copy's
+  // picker never reaches back into the source token's object.
+  createPicker = {
+    selected: new Set(preset.entityIds || []), filter: 'all', label: '', search: '',
+    meta: JSON.parse(JSON.stringify(preset.entityMeta || {})),
+  };
+  document.getElementById('create-modal-title').textContent = preset.title || tr('create.title');
   document.getElementById('f-label').value = preset.label || '';
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
+  document.getElementById('f-countries').value = (preset.countryAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
-  document.getElementById('f-expiry').value = preset.expiryValue || '86400';
+  // A policy, not a secret, so a duplicate carries it the way it carries the
+  // IP allowlist — unlike the PIN itself, which is hashed and belongs to one guest.
+  document.getElementById('f-remember-pin').checked = preset.rememberPin !== false;
+  // A duplicate keeps the lock setting but never the claim: the copy is for a
+  // different guest, whose device has not claimed anything yet.
+  document.getElementById('f-device-binding').checked = Boolean(preset.deviceBinding);
   document.getElementById('create-error').textContent = '';
-  document.getElementById('f-custom-expiry').classList.add('hidden');
-  document.getElementById('f-never-warn').classList.add('hidden');
-  document.getElementById('f-custom-error').classList.add('hidden');
-  document.getElementById('f-custom-datetime').value = '';
-  // Always blank, including on a duplicate: a start time belongs to one
-  // booking the way the slug and the PIN belong to one guest, and a copy made
-  // for the next stay must not silently inherit the last one's check-in.
-  document.getElementById('f-starts-at').value = '';
-  document.getElementById('f-starts-at-error').classList.add('hidden');
-  toggleCustomExpiry('f');
+  // A duplicate passes the source token's timing through
+  // timingPresetFromToken, which keeps the start blank: a start time belongs
+  // to one booking the way the slug and the PIN belong to one guest, and a
+  // copy made for the next stay must not silently inherit the last one's
+  // check-in.
+  setTimingForm('f', preset.timing || {});
   renderPicker('create-picker', createPicker);
   openModal('create-modal');
 }
@@ -1140,28 +1744,31 @@ function closeCreateModal() { closeModal('create-modal'); }
 async function submitCreate() {
   const label = document.getElementById('f-label').value.trim();
   const slug = document.getElementById('f-slug').value.trim() || null;
-  const expiresIn = getExpirySeconds('f');
   const ipRaw = document.getElementById('f-ip').value.trim();
   const ipList = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
+  const countryRaw = document.getElementById('f-countries').value.trim();
+  const countryList = countryRaw
+    ? countryRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : null;
   const errEl = document.getElementById('create-error');
 
   const pin = document.getElementById('f-pin').value.trim() || null;
-  const startsAt = getStartsAt();
+  const timing = readTimingForm('f');
 
-  if (!label) { errEl.textContent = 'Label is required.'; return; }
-  if (expiresIn === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
-  if (startsAt === false) { errEl.textContent = 'Invalid start date. Must be in the future.'; return; }
-  if (createPicker.selected.size === 0) { errEl.textContent = 'Select at least one entity.'; return; }
-  if (pin && !PIN_RE.test(pin)) { errEl.textContent = 'PIN must be 4-8 digits.'; return; }
+  if (!label) { errEl.textContent = tr('create.err_label'); return; }
+  if (timing.error) { errEl.textContent = timing.error; return; }
+  if (createPicker.selected.size === 0) { errEl.textContent = tr('create.err_entities'); return; }
+  if (pin && !PIN_RE.test(pin)) { errEl.textContent = tr('pin.err_format'); return; }
 
   const body = {
     label, slug,
     entity_ids: [...createPicker.selected],
     entity_meta: createPicker.meta,
-    expires_in_seconds: expiresIn,
-    starts_at: startsAt,
+    ...timing.body,
     ip_allowlist: ipList,
+    country_allowlist: countryList,
     pin,
+    remember_pin: document.getElementById('f-remember-pin').checked,
+    device_binding: document.getElementById('f-device-binding').checked,
   };
 
     const r = await fetch(`${BASE}/admin/tokens`, {
@@ -1173,27 +1780,31 @@ async function submitCreate() {
   if (r.ok) {
     const token = await r.json();
     closeCreateModal();
-    showToast('Token created', 'success');
+    showToast(tr('create.created'), 'success');
     loadTokens();
     loadActivity();
     copyUrl(guestLink(token.slug));
   } else {
     const err = await r.json().catch(() => ({}));
-    errEl.textContent = err.detail || 'Error creating token.';
+    errEl.textContent = err.detail || tr('create.error');
   }
 }
 
 async function duplicateToken(tokenId) {
   if (!allEntities.length) await loadEntities();
   const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
-  if (!r.ok) { showToast('Failed to load token', 'error'); return; }
+  if (!r.ok) { showToast(tr('token.load_failed'), 'error'); return; }
   const token = await r.json();
   openCreateModal({
-    title: 'Duplicate Guest Token',
-    label: `${token.label} copy`,
+    title: tr('duplicate.title'),
+    label: tr('duplicate.label', { label: token.label }),
     entityIds: token.entity_ids || [],
+    entityMeta: token.entity_meta || {},
     ipAllowlist: token.ip_allowlist || [],
-    expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
+    timing: timingPresetFromToken(token, Date.now(), true),
+    rememberPin: token.remember_pin,
+    deviceBinding: token.device_binding,
+    countryAllowlist: token.country_allowlist || [],
   });
 }
 
@@ -1227,6 +1838,11 @@ function openEntityModal(containerId, entityId) {
   document.getElementById('entity-proximity').classList.toggle('hidden', !gateable);
   document.getElementById('entity-require-proximity').checked =
     gateable && Boolean(meta.require_proximity);
+  const localGateable = gateable && LOCAL_NETWORK_CONFIGURED;
+  document.getElementById('entity-local-network').classList.toggle('hidden', !localGateable);
+  document.getElementById('entity-local-network-ranges').textContent = LOCAL_NETWORKS.join(', ');
+  document.getElementById('entity-require-local-network').checked =
+    localGateable && Boolean(meta.require_local_network);
 
   openModal('entity-modal');
   nameInput.focus();
@@ -1255,12 +1871,19 @@ function submitEntityMeta() {
   // column because the command path enforces it, and options is presentation.
   const gateable = !PROXIMITY_EXEMPT_DOMAINS.includes(entityId.split('.')[0]);
   const requireProximity = gateable && document.getElementById('entity-require-proximity').checked;
+  // Carried through untouched when the toggle is not on screen, so a flag set
+  // while a home network was configured is not silently cleared by an edit
+  // made after the option was emptied.
+  const requireLocalNetwork = gateable && (LOCAL_NETWORK_CONFIGURED
+    ? document.getElementById('entity-require-local-network').checked
+    : Boolean((pickerState.meta[entityId] || {}).require_local_network));
 
-  if (name || Object.keys(options).length || requireProximity) {
+  if (name || Object.keys(options).length || requireProximity || requireLocalNetwork) {
     pickerState.meta[entityId] = {
       display_name: name || null,
       options: Object.keys(options).length ? options : null,
       require_proximity: requireProximity,
+      require_local_network: requireLocalNetwork,
     };
   } else {
     delete pickerState.meta[entityId];
@@ -1282,19 +1905,163 @@ function openPinModal(tokenId, label) {
   const t = tokens.find(x => x.id === tokenId);
   document.getElementById('pin-token-label').textContent = label;
   document.getElementById('pin-current-state').textContent =
-    t?.has_pin ? 'A PIN is currently set.' : 'No PIN is set — this link opens straight away.';
+    t?.has_pin ? tr('pin.state_set') : tr('pin.state_none');
   document.getElementById('pin-input-field').value = '';
   document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-remember-field').checked = t?.remember_pin !== false;
+  document.getElementById('pin-link-label').value = '';
+  document.getElementById('pin-link-new').classList.add('hidden');
+  document.getElementById('pin-links-section').classList.toggle('hidden', !t?.has_pin);
+  document.getElementById('pin-links-list').innerHTML = '';
   openModal('pin-modal');
+  if (t?.has_pin) loadAccessLinks(tokenId);
 }
 
 function closePinModal() { closeModal('pin-modal'); pinTokenId = null; }
+
+async function saveRememberPin(checked) {
+  if (!pinTokenId) return;
+  const box = document.getElementById('pin-remember-field');
+  const r = await fetch(`${BASE}/admin/tokens/${pinTokenId}/remember-pin`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ remember_pin: checked }),
+  });
+  if (r.ok) {
+    showToast(checked ? tr('pin.remembered') : tr('pin.asked'), 'success');
+    loadTokens();
+  } else {
+    // Put the box back so it never shows a setting the server did not take.
+    box.checked = !checked;
+    showToast(tr('common.save_setting_error'), 'error');
+  }
+}
+
+// ── Links without PIN ─────────────────────────────────────────────────
+// The server keeps only a hash of each code and returns the code itself once,
+// in the response that minted or rotated it. So a link can be copied or shown
+// as a QR at that moment and never again — every "without PIN" button on a
+// card makes a fresh link, and the list here shows labels, not URLs.
+function accessLinkUrl(slug, code) {
+  return `${guestLink(slug)}?c=${encodeURIComponent(code)}`;
+}
+
+async function mintAccessLink(tokenId, label = null) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ label }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    showToast(err.detail || tr('links.create_error'), 'error');
+    return null;
+  }
+  return r.json();
+}
+
+async function copyLinkWithoutPin(tokenId) {
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const entry = await mintAccessLink(tokenId);
+  if (entry) copyUrl(accessLinkUrl(t.slug, entry.code));
+}
+
+async function qrWithoutPin(tokenId) {
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const entry = await mintAccessLink(tokenId);
+  if (entry) showAccessLinkQr(accessLinkUrl(t.slug, entry.code));
+}
+
+function showAccessLinkQr(url) {
+  showQr(url, tr('links.qr_note'));
+}
+
+async function loadAccessLinks(tokenId) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes`);
+  if (!r.ok || tokenId !== pinTokenId) return;
+  renderAccessLinks(await r.json());
+}
+
+function renderAccessLinks(entries) {
+  const list = document.getElementById('pin-links-list');
+  if (!entries.length) {
+    list.innerHTML = `<li class="text-xs text-muted">${esc(tr('links.none'))}</li>`;
+    return;
+  }
+  list.innerHTML = entries.map(e => `<li class="flex items-center gap-2 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark">
+    <div class="flex-1 min-w-0">
+      <div class="text-sm truncate">${e.label ? esc(e.label) : `<span class="text-muted">${esc(tr('links.unlabelled'))}</span>`}</div>
+      <div class="text-[11px] text-muted">${esc(tr('links.made', { when: relativeTime(e.created_at) }))} · ${esc(e.last_used_at ? tr('links.used', { when: relativeTime(e.last_used_at) }) : tr('links.never_used'))}</div>
+    </div>
+    <button data-code-id="${esc(e.id)}" data-action="confirm-rotate-access-link" aria-label="${esc(tr('links.rotate'))}" title="${esc(tr('links.rotate_title'))}"
+      class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+      <span aria-hidden="true" class="material-symbols-outlined text-sm">autorenew</span>
+    </button>
+    <button data-code-id="${esc(e.id)}" data-action="confirm-revoke-access-link" aria-label="${esc(tr('links.revoke'))}" title="${esc(tr('action.revoke'))}"
+      class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+      <span aria-hidden="true" class="material-symbols-outlined text-sm">link_off</span>
+    </button>
+  </li>`).join('');
+}
+
+function showNewAccessLink(slug, entry) {
+  const url = accessLinkUrl(slug, entry.code);
+  document.getElementById('pin-link-new-url').textContent = url;
+  document.getElementById('pin-link-new-copy').dataset.url = url;
+  document.getElementById('pin-link-new-qr').dataset.url = url;
+  document.getElementById('pin-link-new').classList.remove('hidden');
+}
+
+async function createAccessLink() {
+  const tokenId = pinTokenId;
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  const label = document.getElementById('pin-link-label').value.trim().slice(0, 64) || null;
+  const entry = await mintAccessLink(tokenId, label);
+  if (!entry || tokenId !== pinTokenId) return;
+  document.getElementById('pin-link-label').value = '';
+  showNewAccessLink(t.slug, entry);
+  loadAccessLinks(tokenId);
+}
+
+function confirmRotateAccessLink(codeId) {
+  const tokenId = pinTokenId;
+  const t = tokens.find(x => x.id === tokenId);
+  if (!t) return;
+  openConfirmModal(tr('links.rotate_confirm_title'), tr('links.rotate_confirm_body'), async () => {
+    const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes/${codeId}/rotate`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      showToast(err.detail || tr('links.rotate_error'), 'error');
+      return;
+    }
+    const entry = await r.json();
+    showToast(tr('links.rotated'), 'success');
+    if (tokenId !== pinTokenId) return;
+    showNewAccessLink(t.slug, entry);
+    loadAccessLinks(tokenId);
+  });
+}
+
+function confirmRevokeAccessLink(codeId) {
+  const tokenId = pinTokenId;
+  openConfirmModal(tr('links.revoke_confirm_title'), tr('links.revoke_confirm_body'), async () => {
+    const r = await fetch(`${BASE}/admin/tokens/${tokenId}/access-codes/${codeId}`, { method: 'DELETE' });
+    if (!r.ok) { showToast(tr('links.revoke_error'), 'error'); return; }
+    showToast(tr('links.revoked'), 'success');
+    if (tokenId !== pinTokenId) return;
+    document.getElementById('pin-link-new').classList.add('hidden');
+    loadAccessLinks(tokenId);
+  });
+}
 
 async function submitPin() {
   if (!pinTokenId) return;
   const errEl = document.getElementById('pin-error');
   const pin = document.getElementById('pin-input-field').value.trim() || null;
-  if (pin && !PIN_RE.test(pin)) { errEl.textContent = 'PIN must be 4-8 digits.'; return; }
+  if (pin && !PIN_RE.test(pin)) { errEl.textContent = tr('pin.err_format'); return; }
 
   const r = await fetch(`${BASE}/admin/tokens/${pinTokenId}/pin`, {
     method: 'PATCH',
@@ -1304,11 +2071,11 @@ async function submitPin() {
 
   if (r.ok) {
     closePinModal();
-    showToast(pin ? 'PIN updated' : 'PIN removed', 'success');
+    showToast(pin ? tr('pin.updated') : tr('pin.removed'), 'success');
     loadTokens();
   } else {
     const err = await r.json().catch(() => ({}));
-    errEl.textContent = err.detail || 'Error saving PIN.';
+    errEl.textContent = err.detail || tr('pin.error');
   }
 }
 
@@ -1317,14 +2084,14 @@ async function openEditModal(tokenId) {
   editTokenId = tokenId;
   editPicker = { selected: new Set(), filter: 'all', label: '', search: '', meta: {} };
   document.getElementById('edit-error').textContent = '';
-  document.getElementById('edit-token-label').textContent = 'Loading...';
-  document.getElementById('edit-picker').innerHTML = '<div class="text-center py-8 text-muted text-sm">Loading entities...</div>';
+  document.getElementById('edit-token-label').textContent = tr('common.loading');
+  document.getElementById('edit-picker').innerHTML = `<div class="text-center py-8 text-muted text-sm">${esc(tr('edit.loading_entities'))}</div>`;
   openModal('edit-modal');
 
   const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
-  if (!r.ok) { showToast('Failed to load token', 'error'); closeEditModal(); return; }
+  if (!r.ok) { showToast(tr('token.load_failed'), 'error'); closeEditModal(); return; }
   const token = await r.json();
-  document.getElementById('edit-token-label').textContent = `Editing: ${token.label}`;
+  document.getElementById('edit-token-label').textContent = tr('edit.editing', { label: token.label });
   if (token.entity_ids) {
     token.entity_ids.forEach(id => editPicker.selected.add(id));
   }
@@ -1336,7 +2103,7 @@ function closeEditModal() { closeModal('edit-modal'); editTokenId = null; docume
 async function submitEditEntities() {
   if (!editTokenId) return;
   const errEl = document.getElementById('edit-error');
-  if (editPicker.selected.size === 0) { errEl.textContent = 'Select at least one entity.'; return; }
+  if (editPicker.selected.size === 0) { errEl.textContent = tr('create.err_entities'); return; }
 
   const r = await fetch(`${BASE}/admin/tokens/${editTokenId}/entities`, {
     method: 'PATCH',
@@ -1346,12 +2113,12 @@ async function submitEditEntities() {
 
   if (r.ok) {
     closeEditModal();
-    showToast('Entities updated', 'success');
+    showToast(tr('edit.updated'), 'success');
     loadTokens();
     loadActivity();
   } else {
     const err = await r.json().catch(() => ({}));
-    errEl.textContent = err.detail || 'Error updating entities.';
+    errEl.textContent = err.detail || tr('edit.error');
   }
 }
 
@@ -1360,10 +2127,11 @@ let extendTokenId = null;
 
 function openExtendModal(tokenId, label, status = 'active') {
   extendTokenId = tokenId;
-  const action = status === 'expired' || status === 'revoked' ? 'Renew' : 'Extend';
-  document.getElementById('extend-modal-title').textContent = `${action} Expiry`;
-  document.getElementById('extend-token-label').textContent = `${action}: ${label}`;
-  document.getElementById('extend-submit-btn').textContent = action;
+  const renews = status === 'expired' || status === 'revoked' || status === 'used';
+  document.getElementById('extend-modal-title').textContent = renews ? tr('extend.title_renew') : tr('extend.title_extend');
+  document.getElementById('extend-token-label').textContent =
+    tr(renews ? 'extend.label_renew' : 'extend.label_extend', { label });
+  document.getElementById('extend-submit-btn').textContent = renews ? tr('action.renew') : tr('action.extend');
   document.getElementById('extend-duration').value = '86400';
   document.getElementById('extend-error').textContent = '';
   document.getElementById('extend-custom-expiry').classList.add('hidden');
@@ -1378,22 +2146,28 @@ async function submitExtend() {
   if (!extendTokenId) return;
   const seconds = getExpirySeconds('extend');
   const errEl = document.getElementById('extend-error');
-  if (seconds === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
+  if (seconds === null) { errEl.textContent = tr('extend.invalid'); return; }
 
+  // A custom date is a calendar end, so it goes as an absolute expires_at. As
+  // a duration it would be re-anchored to a pending token's start and land
+  // that much later than the date picked.
+  const custom = document.getElementById('extend-duration').value === 'custom';
   const r = await fetch(`${BASE}/admin/tokens/${extendTokenId}/expiry`, {
     method: 'PATCH',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ expires_in_seconds: seconds }),
+    body: JSON.stringify(custom
+      ? { expires_at: Math.floor(Date.now() / 1000) + seconds }
+      : { expires_in_seconds: seconds }),
   });
 
   if (r.ok) {
     closeExtendModal();
-    showToast('Expiry updated', 'success');
+    showToast(tr('extend.updated'), 'success');
     loadTokens();
     loadActivity();
   } else {
     const err = await r.json().catch(() => ({}));
-    errEl.textContent = err.detail || 'Error updating expiry.';
+    errEl.textContent = err.detail || tr('extend.error');
   }
 }
 
@@ -1409,43 +2183,225 @@ function openConfirmModal(title, body, onConfirm) {
 function closeConfirmModal() { closeModal('confirm-modal'); _confirmCallback = null; }
 
 async function confirmRevoke(id) {
-  openConfirmModal('Revoke Token', 'Active guest sessions will be disconnected immediately.', async () => {
+  openConfirmModal(tr('revoke.title'), tr('revoke.body'), async () => {
     const r = await fetch(`${BASE}/admin/tokens/${id}/revoke`, {method: 'POST'});
-    if (r.ok) { showToast('Token revoked', 'success'); loadTokens(); loadActivity(); }
-    else showToast('Error revoking token', 'error');
+    if (r.ok) { showToast(tr('revoke.done'), 'success'); loadTokens(); loadActivity(); }
+    else showToast(tr('revoke.error'), 'error');
   });
 }
 
 async function confirmActivate(id, label) {
   openConfirmModal(
-    'Activate Now',
-    `"${label}" starts working immediately and a guest already waiting on the link is let in at once. Its expiry does not move.`,
+    tr('action.activate'),
+    tr('activate.body', { label }),
     async () => {
       const r = await fetch(`${BASE}/admin/tokens/${id}/activate`, { method: 'POST' });
-      if (r.ok) { showToast('Token activated', 'success'); loadTokens(); loadActivity(); }
-      else showToast('Error activating token', 'error');
+      if (r.ok) { showToast(tr('activate.done'), 'success'); loadTokens(); loadActivity(); }
+      else showToast(tr('activate.error'), 'error');
     },
   );
 }
 
 async function confirmRotate(id) {
-  openConfirmModal('Rotate Link', 'A new link is generated and the current one stops working immediately. Entities, expiry, PIN and history are kept — a guest with a PIN will be asked for it again.', async () => {
+  openConfirmModal(tr('action.rotate'), tr('rotate.body'), async () => {
     const r = await fetch(`${BASE}/admin/tokens/${id}/rotate-slug`, { method: 'POST' });
-    if (!r.ok) { showToast('Failed to rotate link', 'error'); return; }
+    if (!r.ok) { showToast(tr('rotate.failed'), 'error'); return; }
     const token = await r.json();
     loadTokens();
     loadActivity();
-    showToast('Link rotated — new link copied', 'success');
+    showToast(tr('rotate.done'), 'success');
     copyUrl(guestLink(token.slug));
   });
 }
 
+function confirmDeviceBinding(id, label, enabled) {
+  const turningOn = !enabled;
+  openConfirmModal(
+    turningOn ? tr('action.lock_device') : tr('binding.remove_title'),
+    turningOn ? tr('binding.on_body', { label }) : tr('binding.off_body', { label }),
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/device-binding`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ enabled: turningOn }),
+      });
+      if (r.ok) { showToast(turningOn ? tr('binding.locked') : tr('binding.removed'), 'success'); loadTokens(); }
+      else showToast(tr('binding.error'), 'error');
+    },
+  );
+}
+
+function confirmUnbind(id, label) {
+  openConfirmModal(
+    tr('action.unbind'),
+    tr('unbind.body', { label }),
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/unbind`, { method: 'POST' });
+      if (r.ok) { showToast(tr('unbind.done'), 'success'); loadTokens(); loadActivity(); }
+      else showToast(tr('unbind.error'), 'error');
+    },
+  );
+}
+
 async function confirmDelete(id) {
-  openConfirmModal('Delete Token', 'This will permanently remove the token record.', async () => {
+  openConfirmModal(tr('delete.title'), tr('delete.body'), async () => {
     const r = await fetch(`${BASE}/admin/tokens/${id}`, {method: 'DELETE'});
-    if (r.ok) { showToast('Token deleted', 'success'); loadTokens(); loadActivity(); }
-    else showToast('Error deleting token', 'error');
+    if (r.ok) { showToast(tr('delete.done'), 'success'); loadTokens(); loadActivity(); }
+    else showToast(tr('delete.error'), 'error');
   });
+}
+
+// ── Settings ──────────────────────────────────────────────────────────
+// The deployment settings that can change while the app runs. The server owns
+// the list (SettingsUpdateRequest) and refuses anything else; this only says
+// how to draw each one. A key the server does not report is not drawn.
+const SETTINGS_FIELDS = [
+  { key: 'app_name', label: tr('settings.app_name'), type: 'text', maxlength: 64,
+    hint: tr('settings.app_name_hint') },
+  { key: 'contact_message', label: tr('settings.contact_message'), type: 'textarea', maxlength: 500,
+    hint: tr('settings.contact_message_hint') },
+  { key: 'guest_url', label: tr('settings.guest_url'), type: 'text', maxlength: 300,
+    placeholder: 'https://guest.myhouse.com',
+    hint: tr('settings.guest_url_hint') },
+  { key: 'brand_primary', label: tr('settings.brand_primary'), type: 'color', hint: tr('settings.brand_primary_hint') },
+  { key: 'brand_bg', label: tr('settings.brand_bg'), type: 'color', hint: tr('settings.brand_bg_hint') },
+  { key: 'access_log_retention_days', label: tr('settings.retention'), type: 'number', min: 1, max: 3650,
+    hint: tr('settings.retention_hint') },
+];
+// Rendered into the page by the server, so a change is only visible after a
+// reload. The rest (the contact message, retention) are read per request.
+const SETTINGS_NEED_RELOAD = ['app_name', 'guest_url', 'brand_bg', 'brand_primary'];
+let settingsState = {};
+
+function settingsInputHtml(f, entry) {
+  const id = `set-${f.key}`;
+  const cls = 'w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+  const value = entry.value == null ? '' : String(entry.value);
+  if (f.type === 'textarea') {
+    return `<textarea id="${id}" rows="2" maxlength="${f.maxlength}" class="${cls}">${esc(value)}</textarea>`;
+  }
+  if (f.type === 'color') {
+    return `<input id="${id}" type="color" value="${esc(value.toLowerCase())}" class="w-16 h-10 p-1 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark cursor-pointer">`;
+  }
+  if (f.type === 'number') {
+    return `<input id="${id}" type="number" min="${f.min}" max="${f.max}" step="1" value="${esc(value)}" class="${cls}">`;
+  }
+  return `<input id="${id}" type="text" maxlength="${f.maxlength}" placeholder="${esc(f.placeholder || '')}" value="${esc(value)}" class="${cls}">`;
+}
+
+function renderSettings() {
+  document.getElementById('settings-fields').innerHTML = SETTINGS_FIELDS.map(f => {
+    const entry = settingsState[f.key];
+    if (!entry) return '';
+    const option = entry.option === '' || entry.option == null ? tr('settings.empty') : String(entry.option);
+    return `<div>
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <label for="set-${f.key}" class="block text-xs font-mono uppercase tracking-wider text-muted">${esc(f.label)}</label>
+        ${entry.overridden ? `<button type="button" data-action="revert-setting" data-key="${esc(f.key)}"
+          class="inline-flex items-center gap-1 text-[11px] font-display font-medium text-accent hover:underline">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">undo</span> ${esc(tr('settings.revert'))}
+        </button>` : ''}
+      </div>
+      ${settingsInputHtml(f, entry)}
+      <p class="text-[11px] text-muted mt-1">${esc(f.hint)}${entry.overridden
+        ? ` <span class="text-accent">${esc(tr('settings.overriding', { option }))}</span>` : ''}</p>
+    </div>`;
+  }).join('');
+}
+
+// Only what actually changed is sent, so a save touches nothing the admin did
+// not edit — and so an untouched field never becomes an override just because
+// the dialog was saved with it on screen.
+function collectSettings() {
+  const out = {};
+  for (const f of SETTINGS_FIELDS) {
+    const entry = settingsState[f.key];
+    const el = document.getElementById(`set-${f.key}`);
+    if (!entry || !el) continue;
+    let value = el.value;
+    if (f.type === 'number') {
+      if (!/^\d+$/.test(value.trim())) throw new Error(tr('settings.err_whole', { label: f.label }));
+      value = parseInt(value, 10);
+    } else if (f.type === 'color') {
+      value = value.toUpperCase();
+    } else {
+      value = value.trim();
+    }
+    const current = f.type === 'color' ? String(entry.value).toUpperCase() : entry.value;
+    if (value !== current) out[f.key] = value;
+  }
+  return out;
+}
+
+function settingsErrorText(err) {
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail) && err.detail.length) {
+    return err.detail.map(d => String(d.msg || '').replace(/^Value error, /, '')).join(' ');
+  }
+  return tr('settings.save_error');
+}
+
+async function openSettingsModal() {
+  const r = await fetch(`${BASE}/admin/settings`);
+  if (!r.ok) { showToast(tr('settings.load_failed'), 'error'); return; }
+  settingsState = (await r.json()).settings || {};
+  document.getElementById('settings-error').textContent = '';
+  renderSettings();
+  openModal('settings-modal');
+}
+
+function closeSettingsModal() { closeModal('settings-modal'); }
+
+async function submitSettings() {
+  const errEl = document.getElementById('settings-error');
+  errEl.textContent = '';
+  let changes;
+  try { changes = collectSettings(); } catch (e) { errEl.textContent = e.message; return; }
+  const keys = Object.keys(changes);
+  if (!keys.length) { closeSettingsModal(); return; }
+  const r = await fetch(`${BASE}/admin/settings`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(changes),
+  });
+  if (!r.ok) { errEl.textContent = settingsErrorText(await r.json().catch(() => ({}))); return; }
+  settingsState = (await r.json()).settings || {};
+  if (keys.some(k => SETTINGS_NEED_RELOAD.includes(k))) { location.reload(); return; }
+  closeSettingsModal();
+  showToast(tr('settings.saved'), 'success');
+}
+
+async function revertSetting(key) {
+  const r = await fetch(`${BASE}/admin/settings/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  if (!r.ok) { showToast(tr('settings.revert_failed'), 'error'); return; }
+  settingsState = (await r.json()).settings || {};
+  if (SETTINGS_NEED_RELOAD.includes(key)) { location.reload(); return; }
+  renderSettings();
+  showToast(tr('settings.reverted'), 'success');
+}
+
+// ── Language ──────────────────────────────────────────────────────────
+// Pinned per browser in a cookie the server reads when it renders this page
+// (app/i18n.py). Written here rather than through an endpoint: it is this
+// browser's own preference and grants nothing, and the server ignores any
+// value it does not support. Scoped to the dashboard's own path, so it never
+// rides along on a guest link; Lax rather than Strict, because a preference
+// withheld on the navigation that opens the dashboard would be no preference.
+// A reload applies it — most of this page's text was rendered by the server.
+const ADMIN_LANG_COOKIE = {{ admin_lang_cookie | tojson }};
+// Browsers cap a cookie's lifetime at 400 days whatever is asked for.
+const ADMIN_LANG_MAX_AGE = 400 * 86400;
+
+function adminLanguageCookie(lang, secure) {
+  const attrs = `Path=${BASE}/admin; SameSite=Lax${secure ? '; Secure' : ''}`;
+  return lang === 'auto'
+    ? `${ADMIN_LANG_COOKIE}=; ${attrs}; Max-Age=0`
+    : `${ADMIN_LANG_COOKIE}=${encodeURIComponent(lang)}; ${attrs}; Max-Age=${ADMIN_LANG_MAX_AGE}`;
+}
+
+function setAdminLanguage(lang) {
+  document.cookie = adminLanguageCookie(lang, location.protocol === 'https:');
+  location.reload();
 }
 
 // ── Modal Helpers ─────────────────────────────────────────────────────
@@ -1465,12 +2421,13 @@ function closeModal(id) {
   releaseFocus();
 }
 
-['create-modal', 'edit-modal', 'extend-modal', 'confirm-modal', 'qr-modal'].forEach(id => {
+['create-modal', 'edit-modal', 'extend-modal', 'schedule-modal', 'confirm-modal', 'qr-modal'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
     if (e.target === e.currentTarget) {
       if (id === 'create-modal') closeCreateModal();
       else if (id === 'edit-modal') closeEditModal();
       else if (id === 'extend-modal') closeExtendModal();
+      else if (id === 'schedule-modal') closeScheduleModal();
       else if (id === 'confirm-modal') closeConfirmModal();
       else if (id === 'qr-modal') closeQrModal();
     }
@@ -1535,27 +2492,10 @@ function getExpirySeconds(prefix) {
   return parseInt(select.value);
 }
 
-// The optional "valid from" time, as epoch seconds. null means "start now",
-// which is the blank field and every token before this existed. false is the
-// error case and is distinguished from null on purpose — a date the admin
-// typed and got wrong must not silently become an immediately-live link.
-function getStartsAt() {
-  const errorEl = document.getElementById('f-starts-at-error');
-  errorEl.classList.add('hidden');
-  const raw = document.getElementById('f-starts-at').value;
-  if (!raw) return null;
-  const dt = new Date(raw);
-  if (isNaN(dt.getTime()) || dt.getTime() <= Date.now()) {
-    errorEl.classList.remove('hidden');
-    return false;
-  }
-  return Math.floor(dt.getTime() / 1000);
-}
-
 // ── Utilities ─────────────────────────────────────────────────────────
 function copyUrl(url) {
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(url).then(() => showToast('URL copied', 'success')).catch(() => fallbackCopy(url));
+    navigator.clipboard.writeText(url).then(() => showToast(tr('copy.done'), 'success')).catch(() => fallbackCopy(url));
   } else {
     fallbackCopy(url);
   }
@@ -1570,16 +2510,19 @@ function fallbackCopy(text) {
   ta.select();
   try {
     document.execCommand('copy');
-    showToast('URL copied', 'success');
+    showToast(tr('copy.done'), 'success');
   } catch {
-    prompt('Copy this URL:', text);
+    prompt(tr('copy.prompt'), text);
   }
   document.body.removeChild(ta);
 }
 
 // ── QR Code ───────────────────────────────────────────────────────────
-function showQr(url) {
+function showQr(url, note = '') {
   // The guest link itself, openable in a new tab to check what a guest sees.
+  const noteEl = document.getElementById('qr-note');
+  noteEl.textContent = note;
+  noteEl.classList.toggle('hidden', !note);
   const urlEl = document.getElementById('qr-url');
   urlEl.textContent = url;
   urlEl.href = url;
@@ -1622,7 +2565,7 @@ function showQr(url) {
     ctx.fillStyle = '#999';
     ctx.font = '14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('QR library not loaded', size / 2, size / 2);
+    ctx.fillText(tr('qr.not_loaded'), size / 2, size / 2);
   }
 
   openModal('qr-modal');
@@ -1640,6 +2583,8 @@ document.addEventListener('keydown', e => {
       'extend-modal': closeExtendModal,
       'edit-modal': closeEditModal,
       'pin-modal': closePinModal,
+      'schedule-modal': closeScheduleModal,
+      'settings-modal': closeSettingsModal,
       'create-modal': closeCreateModal,
     };
     for (const [id, closer] of Object.entries(closers)) {
@@ -1704,9 +2649,25 @@ document.addEventListener('click', e => {
     case 'open-pin-modal': openPinModal(el.dataset.id, el.dataset.label); break;
     case 'submit-pin': submitPin(); break;
 
+    // Links without PIN
+    case 'copy-link-without-pin': copyLinkWithoutPin(el.dataset.id); break;
+    case 'qr-without-pin': qrWithoutPin(el.dataset.id); break;
+    case 'create-access-link': createAccessLink(); break;
+    case 'show-access-link-qr': showAccessLinkQr(el.dataset.url); break;
+    case 'confirm-rotate-access-link': confirmRotateAccessLink(el.dataset.codeId); break;
+    case 'confirm-revoke-access-link': confirmRevokeAccessLink(el.dataset.codeId); break;
+
     // Extend modal
     case 'open-extend-modal': openExtendModal(el.dataset.id, el.dataset.label, el.dataset.status); break;
     case 'submit-extend': submitExtend(); break;
+
+    // Schedule modal and the timing form inside it and the create modal
+    case 'open-schedule-modal': openScheduleModal(el.dataset.id); break;
+    case 'submit-schedule': submitSchedule(); break;
+    case 'timing-quick': applyQuickEnd(el.dataset.prefix, parseInt(el.dataset.seconds, 10)); break;
+    case 'window-add': addWindow(el.dataset.prefix); break;
+    case 'window-remove': removeWindow(el.dataset.prefix, parseInt(el.dataset.index, 10)); break;
+    case 'window-day': toggleWindowDay(el.dataset.prefix, parseInt(el.dataset.index, 10), parseInt(el.dataset.day, 10)); break;
 
     // Confirm modal
     case 'confirm-ok': {
@@ -1718,7 +2679,7 @@ document.addEventListener('click', e => {
 
     // Close any modal
     case 'close-modal': {
-      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal };
+      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal, schedule: closeScheduleModal, settings: closeSettingsModal };
       const closer = modalMap[el.dataset.modal];
       if (closer) closer();
       break;
@@ -1730,6 +2691,8 @@ document.addEventListener('click', e => {
     case 'confirm-revoke': confirmRevoke(el.dataset.id); break;
     case 'confirm-activate': confirmActivate(el.dataset.id, el.dataset.label); break;
     case 'confirm-rotate': confirmRotate(el.dataset.id); break;
+    case 'confirm-device-binding': confirmDeviceBinding(el.dataset.id, el.dataset.label, el.dataset.enabled === 'true'); break;
+    case 'confirm-unbind': confirmUnbind(el.dataset.id, el.dataset.label); break;
     case 'confirm-delete': confirmDelete(el.dataset.id); break;
 
     // Entity picker
@@ -1740,6 +2703,7 @@ document.addEventListener('click', e => {
     case 'picker-filter': setPickerFilter(el.dataset.container, el.dataset.domain); break;
     case 'picker-label': setPickerLabel(el.dataset.container, el.dataset.label); break;
     case 'picker-add-all': pickerAddAll(el.dataset.container); break;
+    case 'picker-suggest': suggestInto(el.dataset.container, el.dataset.category); break;
 
     // Entity templates
     case 'template-load': loadTemplateInto(el.dataset.container, el.dataset.template); break;
@@ -1748,6 +2712,11 @@ document.addEventListener('click', e => {
     case 'template-delete': confirmDeleteTemplate(el.dataset.template, el.dataset.name); break;
     case 'open-template-modal': openTemplateModal(el.dataset.container); break;
     case 'submit-template': submitTemplate(); break;
+
+    // Settings
+    case 'open-settings-modal': openSettingsModal(); break;
+    case 'submit-settings': submitSettings(); break;
+    case 'revert-setting': revertSetting(el.dataset.key); break;
   }
 });
 
@@ -1765,6 +2734,14 @@ document.addEventListener('change', e => {
   if (e.target.dataset.action === 'toggle-custom-expiry') {
     toggleCustomExpiry(e.target.dataset.prefix);
   }
+  if (e.target.dataset.action === 'timing-mode') {
+    setTimingMode(e.target.dataset.prefix, e.target.value);
+  }
+  if (e.target.dataset.action === 'timing-advanced') {
+    setAdvanced(e.target.dataset.prefix, e.target.checked);
+  }
+  if (e.target.id === 'pin-remember-field') saveRememberPin(e.target.checked);
+  if (e.target.id === 'set-language') setAdminLanguage(e.target.value);
 });
 
 document.addEventListener('input', e => {

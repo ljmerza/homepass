@@ -85,8 +85,10 @@ async def _run(client, admin_session, probe: str):
             parts.append(fh.read())
     parts.append(_dashboard_script(resp.text))
     parts.append(textwrap.dedent(probe))
+    # On stdin rather than -e: the page carries its string catalogue inline,
+    # which puts the script past the kernel's limit on one argument.
     proc = subprocess.run(
-        [node, "--input-type=module", "-e", "\n".join(parts)],
+        [node, "--input-type=module"], input="\n".join(parts),
         capture_output=True, text=True, timeout=60,
     )
     assert proc.returncode == 0, proc.stderr

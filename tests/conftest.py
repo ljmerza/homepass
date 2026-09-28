@@ -85,6 +85,12 @@ def mock_ha_client():
         "logbook_log": AsyncMock(return_value={}),
         "broadcast_token_expired": AsyncMock(),
         "broadcast_token_activated": AsyncMock(),
+        "broadcast_schedule_changed": AsyncMock(),
+        # The house's zone for weekly access windows. UTC so a test can build
+        # a window from time.gmtime() without a zone of its own.
+        "get_time_zone": AsyncMock(return_value="UTC"),
+        "broadcast_device_unbound": AsyncMock(),
+        "broadcast_access_changed": AsyncMock(),
         "invalidate_entity_cache": AsyncMock(),
         "camera_snapshot": AsyncMock(return_value=(b"\xff\xd8fake-jpeg", "image/jpeg")),
         "camera_stream": _fake_camera_stream,

@@ -19,6 +19,10 @@ For direct port access (e.g., `http://<your-ha-ip>:5880/admin/dashboard`), set *
 3. The guest opens the link on their phone. No app install or HA account needed.
 4. When the token expires, the guest sees the contact message and can no longer control devices.
 
+On the guest page each entity is a card with a round icon shape, in the style of Home Assistant's Mushroom cards. The shape's colour shows what the entity is doing: a light that is on is amber (or its own colour, for a colour bulb), a locked door green and an unlocked one red, an armed alarm green, a heating thermostat red and a cooling one blue. Anything switched off or idle goes grey, but its name stays fully readable. Only a device Home Assistant cannot reach fades the whole card. These state colours are fixed and separate from your **Primary Color**, which still styles the buttons and switches.
+
+Without a **Guest URL**, links copied from the HA side panel point at this machine's host name and the add-on's **Network** port, both read from the Supervisor. Remap the port (or rename the host) and new links follow it. If you disable the port, the dashboard warns you, because nothing outside Home Assistant can reach a guest link then.
+
 The slug in the link is the credential: anyone holding the link has the access. Share it the way you would share a password, and use **Revoke** or **Rotate Link** if it ends up somewhere it should not be.
 
 ## Configuration
@@ -34,8 +38,21 @@ Set these options in the add-on Configuration tab:
 | **Background Color** | Hex color for page background (e.g., `#F2F0E9`) |
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
+| **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
+| **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
+| **Trusted Proxies** | Comma-separated CIDRs of reverse proxies allowed to report the visitor's address in `X-Forwarded-For`. Leave empty to trust Home Assistant's internal network (`172.30.32.0/23`), which covers ingress and proxy add-ons such as NGINX Proxy Manager or Cloudflared. Set it if your proxy runs elsewhere (e.g., `192.168.1.10/32`). The IP and country allowlists, the home-network check and rate limits all use this address; a proxy that isn't trusted makes every guest look like the proxy, and HomePass logs a warning naming it. |
+| **Enable API** | Serve the REST API under `/api/v1` for automations and Node-RED. Off by default. See [Public API](#public-api). |
+| **API Token** | Key for the REST API, sent as the `X-API-Key` header. Required when the API is enabled, min 32 characters. |
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
+
+### Changing settings from the dashboard
+
+The **Settings** button (the sliders icon in the dashboard header) edits App Name, Contact Message, Guest URL, both colours and how many days of activity to keep. Changes apply straight away, with no restart.
+
+A value saved there **overrides** the add-on option. The option stays underneath: the dialog shows which fields are overridden and what the option says, and **Revert** puts the option back in charge. While a field is overridden, changing that option in the Configuration tab has no effect. Saving a field back to the same value as its option clears the override.
+
+Admin username and password, and the Home Assistant connection, can only be changed in the add-on configuration. A mistake there could lock you out of the dashboard, and they are not something a browser session should be able to read or change.
 
 ## Choosing entities
 
@@ -49,6 +66,8 @@ Three ways to narrow the list, and they combine:
 
 If the label row is missing, HomePass could not read the label registry from Home Assistant. Everything else still works.
 
+**Suggest** (new links only) offers two starting points: **Doors & locks** adds every lock, plus covers that Home Assistant classes as a door, gate or garage door and covers or buttons whose name says door, gate or garage. **Lights** adds every light, plus switches named as a light or lamp. Nothing is picked until you press one, pressing one only adds to the selection, and names are matched as whole words, so "Outdoor Blinds" is not a door. Check what was added before you create the link.
+
 **Templates** save the current selection under a name so a later link can start from it. Loading a template adds to whatever is already selected, so two templates can be stacked; entities Home Assistant no longer has are dropped quietly.
 
 ### Per-entity options
@@ -59,16 +78,29 @@ Click a selected entity to open its options:
 - **Show brightness slider** (lights only) — off by default, so a light is on/off unless you turn this on.
 - **Show colour controls** (lights only) — also off by default. Gives the guest a colour wheel, a warm–cool temperature slider, or both, depending on what the bulb supports.
 - **Require the guest to be at the property** — see below.
+- **Only from the home network** — shown once **Home Network Ranges** is set. See below.
 
 These belong to the link, not the entity. The same light can be on/off for the cleaner and fully adjustable for a house guest.
 
-## Expiry and scheduled start
+## When a link works
 
-Pick a preset duration (1 hour through 1 year), enter a custom one, or choose **Never expires**. You can extend an expiry later from the token's card.
+When creating a link, choose one of three modes under **Access**:
 
-**Valid From** is optional. Set a future date and time and the link can be sent immediately, but until then a guest who opens it sees a countdown and a greyed-out preview instead of working controls — no Home Assistant state reaches the page. The duration runs from the start, not from when you created the link: a 3-day link starting next Friday is three days of access beginning next Friday.
+- **Single use** — the link stops working once it has been used (set **Uses** above 1 for a few uses). A use is one control the guest presses and Home Assistant accepts. Opening the link does not count, and neither does a chat app such as WhatsApp loading it to draw a preview card, so sending the link cannot use it up. A failed command does not count either. A link with only cameras and sensors on it is never used up. **Valid until** is optional.
+- **No expiry** — works until you revoke it.
+- **Set a period** — works from **Starts** to **Ends**. Leave the start blank to start now. The quick buttons (+1 day, +7 days, …) set the end relative to the start.
 
-**Activate Now** opens a scheduled link straight away. Its expiry does not move, and a guest already waiting on the link is let in without reloading.
+Before its start, a guest who opens the link sees a countdown and a greyed-out preview instead of working controls — no Home Assistant state reaches the page, so the link can be sent days early.
+
+### Weekly times
+
+In **Set a period**, tick **Advanced: only on certain days and times** to limit the link to recurring weekly windows inside the period — "Tuesdays and Thursdays 09:00–13:00" for a cleaner, say. You can add several. An end earlier than the start runs past midnight, and the days you pick are the days the window *opens*: Friday 22:00–02:00 runs from Friday night into Saturday morning. End at 00:00 to run to midnight; 00:00–00:00 is the whole day.
+
+Times are in the house's time zone — Home Assistant's own, unless the **Time Zone** option overrides it. Outside every window the guest sees "Not active right now" with a countdown to the next one, and every part of the link — live state, commands, camera views — is refused. A page left open flips to the countdown when the window closes. If the time zone cannot be read, windowed links refuse access rather than guess.
+
+### Changing it later
+
+**Schedule** on a token's card edits all of the above after the link was created — start, end, weekly times and use limit — and moves any guest who has the link open onto the new schedule at once. Raising **Uses** on a used link grants the extra uses; **Reset the use count** starts it over. **Activate Now** opens a scheduled link straight away without moving its end. **Extend** / **Renew** pushes the end out, and on a used-up single-use link Renew also gives its uses back.
 
 ## PIN protection
 
@@ -77,9 +109,30 @@ You can put an optional 4–8 digit PIN on a link, either when creating it or la
 Two things to know:
 
 - **A forgotten PIN cannot be looked up.** PINs are stored hashed. The dashboard can tell you that a link has one; it can never tell you what it is. If a guest forgets it, set a new PIN and tell them the new one.
-- **Changing or removing a PIN signs out everyone who had entered the old one.** They are asked again on their next action.
+- **Changing or removing a PIN signs out everyone who had entered the old one.** They are asked again on their next action. It also retires every link without PIN (below).
 
 Guessing is rate-limited, so a PIN entered wrongly several times in a row starts being refused for a minute at a time. Wait and try again.
+
+**Remember the PIN on the guest's device** is on by default. Turn it off — in the create form, or in the PIN dialog, where it saves as soon as you tick it — and the guest's PIN entry only lasts until they close their browser, so they are asked again every time they reopen the link. That suits a link that never expires. Turning it off also asks anyone it was already remembered for to enter the PIN again. Some browsers restore a closed session when they reopen, and keep the entry with it; even then it never lasts past the usual 24 hours.
+
+### Links without PIN
+
+A PIN-protected card has **Copy link without PIN** and **QR without PIN**. Each makes a new link that opens straight to the controls, skipping the keypad — for a QR code on the fridge, say, while the link you text out still asks for the PIN. The guest is signed in the same way a correct PIN would sign them in, and the code is removed from the address bar straight away.
+
+- **Each link is shown once.** Like PINs, links are stored hashed, so copy it or show its QR when you make it. Lost one? Make another.
+- **Manage them in the PIN dialog** (**PIN Protected** on the card). It lists every link with an optional label, when it was made and when it was last used. **Rotate** replaces a link with a new one under the same label; **Revoke** removes it. Both sign out every device that had opened that link — other links and the PIN itself are unaffected.
+- **Changing or removing the PIN, or rotating the token's link, retires all of them.**
+- A link without PIN skips the PIN and nothing else. The IP and country allowlists, expiry, revocation, a use limit, a scheduled start, weekly times and a device lock all still apply.
+- Up to 20 links per token.
+
+## Locking a link to one device
+
+Tick **Lock to one device** when creating a link, or use **Lock to One Device** on its card later. The guest sees a short "Use this device?" screen the first time; after they tap it, the link only works in that browser. Anyone else who opens it — a friend it was forwarded to, the guest's second phone — gets a page saying the link is in use on another device.
+
+- **Sharing the link in a chat app does not use it up.** The app's preview fetch only sees the "Use this device?" screen, which says nothing about your home. The link is claimed only when someone taps the button.
+- **It is tied to the browser, not the phone.** Some chat apps (Instagram, Facebook and others) open links in their own built-in browser, which counts as a different device. So does switching from Safari to Chrome, clearing cookies, and possibly adding the page to an iPhone home screen. The screens tell the guest to open the link in their normal browser first.
+- **Unbind Device** on the card lets the next device claim the link, which is the fix when a guest is locked out of their own link. **Rotate Link** also releases the claim, and gives the link to a new person.
+- Claims and refusals show up in **Recent activity**, so you can see when a link has reached a second device.
 
 ## Requiring the guest to be at the property
 
@@ -91,6 +144,14 @@ Any controllable entity can be marked **Require the guest to be at the property*
 
 `zone.home` is the Home zone under **Settings → Areas, labels & zones**. Its radius is what HomePass compares against, so widen it there if guests are being refused at the door.
 
+## Only from the home network
+
+Set **Home Network Ranges** in the add-on options, and any controllable entity can be marked **Only from the home network**. The guest still sees the control and its state wherever they are, but pressing it only works when they are connected to one of those ranges — your Wi-Fi, typically. Locks, covers and buttons are ticked for you when you add them to a link; untick one for a guest you trust to use it from anywhere.
+
+- **It relies on the client address** described under **Trusted Proxies**, the same as the IP allowlist.
+- **If guests use a public link at home**, through a tunnel or Nabu Casa, their requests may arrive from your public IP rather than a home address. Add your public IP to the ranges in that case.
+- **Clearing the option turns the check off** for every link, including entities already marked.
+
 ## Cameras
 
 Add a camera entity to a link and the guest gets a live view on their page. It is read-only: no camera service can be called through a guest link. The view stops when the guest closes or backgrounds the tab, and one link is limited to 8 live views at a time across all of the guest's devices.
@@ -99,17 +160,53 @@ Add a camera entity to a link and the guest gets a live view on their page. It i
 
 Each token's card offers:
 
-- **Extend** — push the expiry out. It reads **Renew** on a link that has already expired or been revoked.
+- **Extend** — push the expiry out. It reads **Renew** on a link that has already expired, been revoked or been used up.
+- **Schedule** — change the start, end, weekly times or use limit. See [When a link works](#when-a-link-works).
 - **Edit Entities** — change what is on the link, including the per-entity options.
-- **Add PIN / PIN Protected** — set, change or remove the PIN.
-- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again.
-- **Duplicate** — start a new link pre-filled with this one's entities and IP allowlist.
+- **Add PIN / PIN Protected** — set, change or remove the PIN, choose whether it is remembered, and manage links without PIN.
+- **Copy link without PIN / QR without PIN** — on PIN-protected links only; see above.
+- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, links without PIN are retired, and a device lock is released.
+- **Lock to One Device / Unbind Device** — lock the link to the first browser that claims it, or release the claim so the next device can take it.
+- **Duplicate** — start a new link pre-filled with this one's entities and their settings (display names, location and home-network requirements), IP allowlist, country allowlist, device-lock and remember-PIN settings, and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 
-**IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It only means anything if HomePass sits behind a reverse proxy that overwrites the client address; on a bare LAN setup it is easy to bypass. To change it later, duplicate the link and revoke the old one.
+**IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It checks the address described under **Trusted Proxies** in [Configuration](#configuration). To change it later, duplicate the link and revoke the old one.
 
-**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
+**Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
+
+**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days, or as set under **Settings**.
+
+## Public API
+
+An optional REST API lets Home Assistant automations, Node-RED or any HTTP client manage tokens without the dashboard. It is off until you turn on **Enable API** and set an **API Token** of at least 32 characters (`openssl rand -hex 32` makes a good one), then restart the add-on.
+
+Send the token in the `X-API-Key` header on every request. A dashboard login does not unlock the API; only the key does.
+
+| Method | Path | Does |
+|---|---|---|
+| `GET` | `/api/v1/tokens` | List tokens |
+| `POST` | `/api/v1/tokens` | Create a token |
+| `GET` | `/api/v1/tokens/{id}` | One token, with entities and per-entity options |
+| `PATCH` | `/api/v1/tokens/{id}` | Change label, entities, expiry, PIN, remember-PIN or the device lock |
+| `PUT` | `/api/v1/tokens/{id}/schedule` | Replace start, end, weekly times and use limit |
+| `POST` | `/api/v1/tokens/{id}/unbind` | Release a device lock's claim |
+| `GET` / `POST` | `/api/v1/tokens/{id}/access-codes` | List or make links without PIN (a new code is shown once) |
+| `POST` / `DELETE` | `/api/v1/tokens/{id}/access-codes/{code_id}[/rotate]` | Rotate or revoke one link without PIN |
+| `DELETE` | `/api/v1/tokens/{id}` | Delete a token and its history |
+| `POST` | `/api/v1/tokens/{id}/revoke` | Revoke |
+| `POST` | `/api/v1/tokens/{id}/renew` | New expiry, and un-revoke |
+| `POST` | `/api/v1/tokens/{id}/activate` | Start a scheduled token now |
+| `POST` | `/api/v1/tokens/{id}/rotate-slug` | New link, old one stops working |
+| `POST` | `/api/v1/tokens/{id}/duplicate` | Copy entities, options, allowlists, weekly times, use limit, remember-PIN and device-lock settings into a new token |
+
+Anything that sets an expiry takes either `expires_at` (Unix seconds — handy for a check-out time) or `expires_in_seconds`, not both. Creating a token runs the same checks as the dashboard and accepts every field the dashboard sets — weekly times, use limit, remember-PIN, device lock and country allowlist included. Responses never include a PIN, only `has_pin`.
+
+With the API enabled, the dashboard header gets an **API Docs** link to an interactive Swagger page at `/api/docs`. The page and the schema at `/api/openapi.json` need a dashboard login (the schema also accepts the API key). The API is limited to 120 requests a minute per client IP.
+
+## Languages
+
+Guest links show in the guest's own browser language when it is one of the 24 official EU languages, and in English otherwise. The admin dashboard is in English or Spanish: it follows your browser, and **Settings → Language** pins one for the browser you are using. The app name, contact message, token labels and display names you set are shown exactly as you typed them, in every language.
 
 ## Notifications
 
@@ -119,7 +216,11 @@ HomePass fires a `homepass_activity` event on Home Assistant's event bus when a 
 
 **A guest link looks broken in the HA sidebar.** Guest links are meant to be opened outside Home Assistant, on the direct port or your **Guest URL**. The sidebar panel is the admin dashboard.
 
-**The guest sees "This link is not active yet".** The link has a **Valid From** time that has not arrived. Use **Activate Now** if that was a mistake.
+**The guest sees "This link is not active yet".** The link has a start time that has not arrived. Use **Activate Now** if that was a mistake.
+
+**The guest sees "Not active right now".** The link has weekly times and it is outside all of them. Check the times against the zone shown under **Advanced** — it is the house's time zone, not the guest's.
+
+**The guest sees "Link Already Used".** A single-use link was used. **Renew** it, or raise its uses under **Schedule**.
 
 **A location-gated control says the link needs to be secure.** The guest is on `http://`. Set **Guest URL** to an HTTPS address.
 

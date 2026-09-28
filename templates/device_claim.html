@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{# Served for a device-bound link nobody has claimed yet. This is also the page a
+   chat app fetches to build its link preview, so it deliberately names neither
+   the link nor anything on it — the title and the copy are the same for every
+   token. #}
+{% block title %}{{ app_name }}{% endblock %}
+
+{% block head_extra %}
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="{{ brand_bg_dark }}" media="(prefers-color-scheme: dark)">
+{% endblock %}
+
+{% block body_attrs %}class="bg-bg-light dark:bg-bg-dark text-soot dark:text-gray-100 font-sans antialiased min-h-dvh flex items-center justify-center text-center p-8"{% endblock %}
+
+{% block body %}
+  <div class="w-full max-w-xs">
+    <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
+      <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">smartphone</span>
+    </div>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.device_claim.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed mb-6">{{ t('page.device_claim.body') }}</p>
+
+    {# A plain form POST, not a script: claiming has to be a deliberate tap, and
+       nothing that merely fetches or renders this page submits a form. #}
+    <form method="post" action="{{ base_path }}/g/{{ slug }}/bind">
+      <button type="submit" class="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors">
+        {{ t('page.device_claim.button') }}
+      </button>
+    </form>
+
+    <p class="text-muted text-sm leading-relaxed mt-6">{{ t('page.device_claim.chat_app_html') }}</p>
+  </div>
+{% endblock %}
+
+{% block body_scripts %}
+<script src="{{ base_path }}/static/theme.js?v={{ build_version }}"></script>
+{% endblock %}

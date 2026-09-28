@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Enter PIN — {{ app_name }}{% endblock %}
+{% block title %}{{ t('page.pin.title') }} — {{ app_name }}{% endblock %}
 
 {% block head_extra %}
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,20 +18,20 @@
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
       <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">lock</span>
     </div>
-    <h1 class="text-2xl font-serif tracking-tight mb-2">Enter PIN</h1>
-    <p class="text-muted text-base leading-relaxed mb-6">This link is PIN-protected. Enter the PIN you were given to continue.</p>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.pin.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed mb-6">{{ t('page.pin.body') }}</p>
 
     <form method="post" action="{{ base_path }}/g/{{ slug }}/pin">
-      <label for="pin-input" class="sr-only">PIN</label>
+      <label for="pin-input" class="sr-only">{{ t('page.pin.label') }}</label>
       <input id="pin-input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*"
         autocomplete="off" maxlength="8" required autofocus
         class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-center text-lg tracking-[0.3em] font-mono outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
         placeholder="••••">
-      {% if error %}
-      <p class="text-sm text-primary mt-2" role="alert">{{ error }}</p>
+      {% if error_key %}
+      <p class="text-sm text-primary mt-2" role="alert">{{ t(error_key) }}</p>
       {% endif %}
       <button type="submit" class="w-full mt-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors">
-        Continue
+        {{ t('page.pin.continue') }}
       </button>
     </form>
 

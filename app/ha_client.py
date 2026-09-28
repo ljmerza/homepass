@@ -144,9 +144,16 @@ async def _fan_out(entity_id: str, new_state: dict) -> None:
                     pass  # slow consumer; drop event
 
 
-async def broadcast_token_expired(token_id: str) -> None:
-    """Push token_expired event to all SSE connections for a token."""
-    event = {"type": "token_expired"}
+async def broadcast_token_expired(token_id: str, reason: str | None = None) -> None:
+    """Push token_expired event to all SSE connections for a token.
+
+    `reason` is set only when the guest page can say something more useful
+    than "expired" — "used", when a single-use link has just spent its last
+    use. It says nothing about the house, only about the link.
+    """
+    event: dict[str, Any] = {"type": "token_expired"}
+    if reason:
+        event["reason"] = reason
     async with _sub_lock:
         queues = set(_subscriptions.get(token_id, set()))
     for q in queues:
@@ -165,6 +172,67 @@ async def broadcast_token_activated(token_id: str) -> None:
     page instead.
     """
     event = {"type": "token_activated"}
+    async with _sub_lock:
+        queues = set(_subscriptions.get(token_id, set()))
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
+async def broadcast_schedule_changed(token_id: str) -> None:
+    """Push schedule_changed to all SSE connections for a token.
+
+    Sent when an admin edits a token's timing. A tab sitting on the "not active"
+    countdown was told a time that may no longer apply, and a live tab may just
+    have lost its window, so both reload and let the server decide again. The
+    event carries no data: the page learns the new schedule from the reload,
+    which re-runs every gate.
+    """
+    event = {"type": "schedule_changed"}
+    async with _sub_lock:
+        queues = set(_subscriptions.get(token_id, set()))
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
+async def broadcast_device_unbound(token_id: str) -> None:
+    """Push device_unbound to all SSE connections for a token.
+
+    Sent when an admin clears a token's device claim, or turns binding on or off
+    for a link. A stream is validated once, at connect, so without this the
+    device that just lost the link would keep receiving live state until it
+    happened to reconnect. Not token_expired: the link is still good, and the
+    guest page reloads into whatever the server now serves it — the claim
+    screen, usually — rather than the expired one.
+    """
+    event = {"type": "device_unbound"}
+    async with _sub_lock:
+        queues = set(_subscriptions.get(token_id, set()))
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
+async def broadcast_access_changed(token_id: str) -> None:
+    """Push access_changed to all SSE connections for a token.
+
+    Sent when an admin changes who is let past the PIN: a new or cleared PIN,
+    remember-PIN turned off, or a link without PIN revoked or rotated. Those
+    writes sign sessions out, but a stream is validated once, at connect, so a
+    signed-out device would otherwise keep receiving live state until it
+    happened to reconnect. Every tab on the token gets it, not only the ones
+    signed out — which ones those are is decided by cookies this cannot see —
+    and each reloads into whatever the server now serves it: the PIN screen,
+    or the same page as before.
+    """
+    event = {"type": "access_changed"}
     async with _sub_lock:
         queues = set(_subscriptions.get(token_id, set()))
     for q in queues:
@@ -319,6 +387,45 @@ async def get_home_zone() -> dict[str, float] | None:
 
     _home_zone, _home_zone_ts = zone, now
     return zone
+
+
+# Home Assistant's configured time zone, for weekly access windows (see
+# app/schedule.py). A house changes zone about never, so an hour's cache is
+# generous; it only bounds how long an edit in HA takes to reach the gate.
+#
+# A failed read keeps serving the last good value. Unlike zone.home there is a
+# safe stale answer here — the zone the house was in an hour ago is the zone
+# it is in now — and dropping it would close every windowed link for as long
+# as HA was unreachable. Retries after a failure are spaced so a down HA is
+# not asked again on every guest request.
+TIME_ZONE_CACHE_TTL = 3600
+TIME_ZONE_RETRY_SECONDS = 60
+
+_time_zone: str | None = None
+_time_zone_next_read: float = 0.0
+
+
+async def get_time_zone() -> str | None:
+    """Return HA's configured IANA time zone name, or None if never read."""
+    global _time_zone, _time_zone_next_read
+    now = time.monotonic()
+    if now < _time_zone_next_read:
+        return _time_zone
+
+    try:
+        resp = await _require_client().get("/api/config")
+        resp.raise_for_status()
+        name = resp.json().get("time_zone")
+    except Exception:
+        logger.warning("Could not read Home Assistant's time zone from /api/config")
+        name = None
+
+    if isinstance(name, str) and name:
+        _time_zone = name
+        _time_zone_next_read = now + TIME_ZONE_CACHE_TTL
+    else:
+        _time_zone_next_read = now + TIME_ZONE_RETRY_SECONDS
+    return _time_zone
 
 
 async def validate_connectivity() -> None:

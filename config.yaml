@@ -25,6 +25,11 @@ options:
   brand_bg: "#F2F0E9"
   brand_primary: "#D9523C"
   guest_url: ""
+  timezone: ""
+  local_network_cidrs: ""
+  trusted_proxies: ""
+  api_enabled: false
+  api_token: ""
 schema:
   admin_username: "str?"
   admin_password: "password?"
@@ -33,4 +38,9 @@ schema:
   brand_bg: str
   brand_primary: str
   guest_url: "str?"
+  timezone: "str?"
+  local_network_cidrs: "str?"
+  trusted_proxies: "str?"
+  api_enabled: bool
+  api_token: "password?"
 image: "ghcr.io/ljmerza/homepass"

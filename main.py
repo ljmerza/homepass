@@ -6,18 +6,24 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import database as db
+from app import geoip
 from app import ha_client
+from app import local_network
+from app import i18n
+from app import settings_store
+from app.api_auth import api_enabled
 from app.config import settings
 from app.context import base_context
-from app.ingress import get_ingress_path
+from app.ingress import get_guest_link_target, get_ingress_path
 from app.models import NEVER_EXPIRES_SECONDS
 from app.rate_limiter import rate_limiter
-from app.routers import admin, guest
+from app.routers import admin, guest, public_api
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +48,13 @@ async def lifespan(app: FastAPI):
         logger.critical("Failed to initialize database at %s: %s", settings.db_path, exc)
         raise RuntimeError(f"Database initialization failed: {exc}") from exc
 
+    # Before anything renders or reads a setting. A failure here is not fatal:
+    # the add-on options underneath every override are still a working config.
+    try:
+        await settings_store.load()
+    except Exception:
+        logger.exception("Could not apply dashboard setting overrides — using the add-on options")
+
     ha_client.init_client()  # sync — no await
 
     # HA may still be booting (e.g. after a host reboot) — retry before giving up.
@@ -61,6 +74,13 @@ async def lifespan(app: FastAPI):
 
     await ha_client.start_ws_listener()
 
+    # Parse the GeoIP table in the background when a live link will need it,
+    # so the first country-gated guest request does not wait on a cold load.
+    # Installs with no country allowlist never load it at all.
+    geoip_warm = None
+    if geoip.available() and await db.any_country_allowlist():
+        geoip_warm = asyncio.create_task(geoip.get_table())
+
     async def _cleanup_loop():
         while True:
             await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
@@ -78,6 +98,8 @@ async def lifespan(app: FastAPI):
 
     # M-7: Shutdown with timeout
     cleanup_task.cancel()
+    if geoip_warm is not None:
+        geoip_warm.cancel()
     try:
         await asyncio.wait_for(ha_client.stop_ws_listener(), timeout=5)
     except asyncio.TimeoutError:
@@ -141,6 +163,12 @@ async def security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
+# Always mounted; every route in both answers 404 while the API is disabled.
+# Registering them conditionally at import would tie the decision to whatever
+# the settings said when the module loaded, and leave nothing to test.
+app.include_router(public_api.router)
+app.include_router(public_api.docs_router)
+app.add_exception_handler(RequestValidationError, public_api.api_validation_error_handler)
 
 
 @app.get("/")
@@ -150,11 +178,24 @@ async def root(request: Request):
 
 @app.get("/admin/dashboard", include_in_schema=False)
 async def admin_dashboard_page(request: Request):
-    ctx = base_context(request)
+    ctx = base_context(request, i18n.ADMIN)
+    is_ingress = bool(ctx["base_path"])
+    # Only the sidebar needs the Supervisor lookup: there the admin is on HA's
+    # origin and guest links have to point at the add-on's published port.
+    # Direct-port admins link to their own origin, and a Guest URL beats both.
+    target = await get_guest_link_target() if is_ingress and not settings.guest_url else None
     ctx.update({
         "never_expires": NEVER_EXPIRES_SECONDS,
-        "is_ingress": bool(ctx["base_path"]),
+        "is_ingress": is_ingress,
         "guest_url": settings.guest_url,
+        # The "home network only" toggle is offered only when there is a home
+        # network to check against; the ranges are shown beside it so the admin
+        # can see what the flag will actually compare with.
+        "local_networks": [str(n) for n in local_network.networks()],
+        "geoip_available": geoip.available(),
+        "api_enabled": api_enabled(),
+        "direct_guest_base": target.base_url if target else "",
+        "guest_port_unpublished": bool(target and not target.published),
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 

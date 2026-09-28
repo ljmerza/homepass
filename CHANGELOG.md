@@ -9,6 +9,109 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
+## [1.1.0] - 2026-09-28
+
+### Added
+
+- **Absolute expiry.** Creating, extending or renewing a link takes either a
+  duration or an exact end time (`expires_at`). The renew dialog's custom date
+  is now the end you picked, not a duration re-anchored to a pending start.
+- **Weekly access windows.** Limit a link to recurring days and times — say
+  Tue/Thu 09:00–13:00 — with overnight windows supported. Evaluated in Home
+  Assistant's time zone, or the new **Time Zone** option. Enforced on every
+  guest endpoint; outside a window the page shows a countdown, a live page and
+  its camera streams close when the window ends, and a link whose zone can't be
+  read refuses (fails closed).
+- **Single-use and N-use links.** A use is one guest command Home Assistant
+  accepted, claimed atomically and refunded if HA fails. Opening the link — or a
+  chat app building a preview of it — never spends a use. A spent link answers
+  "Link Already Used"; Renew gives it its uses back.
+- **Schedule editing.** A **Schedule** button on each card changes start, end,
+  weekly times and use limit after creation, and open guest tabs re-check.
+  The create form's timing is now three modes: single use, no expiry, or a
+  period with optional weekly times.
+- **Links without PIN.** A PIN-protected link can hand out extra
+  `/g/<slug>?c=<code>` links (or QR codes) that skip the keypad and nothing
+  else. Codes are 192-bit, shown once, stored hashed, accepted on the page only,
+  and revocable or rotatable one at a time; revoking one signs out the devices
+  it let in. Changing the PIN or rotating the link retires them all.
+- **Remember PIN, per link.** Off, a correct PIN lasts only until the guest
+  closes their browser. Turning it off signs out remembered sessions.
+- **Lock a link to one device.** Optional. The first browser to tap "Use this
+  device" owns the link; every other device is refused on every guest endpoint.
+  Opening the link never claims it, so chat-app previews can't. **Unbind
+  Device** lets the next device claim it; Rotate Link releases it too.
+- **Home-network-only controls.** With the new **Home Network Ranges** option
+  set, individual entities can be marked usable only from the home network.
+  Locks, covers and buttons are pre-ticked when added. Viewing is never gated.
+- **Country allowlist, per link.** Restrict a link to visitors from chosen
+  countries using an offline DB-IP Lite database baked into the image (IP
+  Geolocation by DB-IP, CC BY 4.0). Home-network addresses pass; addresses the
+  database can't place are refused.
+- **Public REST API.** Optional, off by default: **Enable API** plus an **API
+  Token** (min 32 characters) serves `/api/v1` for automations and Node-RED,
+  authenticated by `X-API-Key` and rate-limited per IP. It covers every token
+  action and field the dashboard has — create, edit, schedule, revoke, renew,
+  activate, rotate, duplicate, unbind and links without PIN — through the
+  dashboard's own handlers. A self-hosted Swagger UI at `/api/docs` runs under
+  the unchanged CSP and needs a dashboard login.
+- **Settings from the dashboard.** App name, contact message, brand colours,
+  Guest URL and access-log retention can be overridden from a **Settings**
+  dialog without a restart; reverting hands control back to the add-on option.
+- **Sidebar guest links follow the real port.** Under ingress with no Guest
+  URL, links use the host port Supervisor maps to 5880 and the host's name, and
+  the dashboard warns when that port is not published.
+- **Entity suggestions.** "Doors & locks" and "Lights" chips in the create
+  picker add likely entities for review; nothing is selected until pressed.
+- **Remember me on the admin login.**
+- **Trusted Proxies option.** Comma-separated CIDRs of reverse proxies allowed
+  to report the visitor's address. Empty trusts Home Assistant's internal
+  network in the add-on, and loopback only standalone. See Security below.
+- **Guest pages in the 24 official EU languages**, picked from the browser, and
+  the admin dashboard in English and Spanish with a per-browser language pin
+  (Settings → Language). Catalogues other than English and Spanish are machine
+  translated and unreviewed — corrections welcome.
+
+### Changed
+
+- **Duplicate carries more.** A copy keeps the source's timing mode, use limit,
+  weekly times and length (starting now), remember-PIN, device-lock setting and
+  country allowlist. The PIN, the start date, a device claim and links without
+  PIN are never copied.
+- **Guest gates run in one documented order:** dead link → IP allowlist →
+  country → PIN (or a link without PIN) → device lock → schedule, then
+  home network → proximity on commands.
+
+- **Guest cards redesigned** in the Home Assistant Mushroom style: borderless
+  cards with a round icon coloured by what the entity is doing (a locked lock
+  green, an unlocked one red, a colour bulb its own colour), and plain section
+  headings. Every control works as before.
+- **Duplicate from the dashboard keeps per-entity settings**, including the
+  proximity and home-network requirements, so a copy is never looser than its
+  source.
+
+### Security
+
+- **`X-Forwarded-For` is only believed from trusted proxies.** It was taken
+  from any caller, leftmost entry first, so a request could claim any address
+  and pass the IP allowlist, the country allowlist and the home-network check,
+  or dodge the rate limits. The header is now used only when the connection
+  comes from a trusted proxy, read right to left across every header line. If
+  your reverse proxy is not on Home Assistant's internal network or loopback,
+  add it to **Trusted Proxies**, or every guest behind it will appear to come
+  from the proxy (HomePass logs a warning naming the address).
+- **Open streams and camera views now end when a device is signed out.**
+  Changing the PIN, turning Remember PIN off, or revoking a link without PIN
+  used to leave an already-open live view running until it reconnected. Guests
+  are told immediately, and open streams re-check access every 30 seconds.
+
+### Migrations
+
+- Four new migrations (009–012): token timing columns, the
+  `token_access_codes` table and `remember_pin`, device-binding / country /
+  home-network columns, and the `app_settings` table. Existing tokens behave
+  exactly as before.
+
 ## [1.0.2] - 2026-09-22
 
 ### Fixed

@@ -59,7 +59,9 @@ installs, just a link.
 
 Admin access works through the HA sidebar — no separate login needed. Guest
 links use the direct port (`http://<your-ha-ip>:5880/g/{slug}`) so visitors
-don't need HA accounts.
+don't need HA accounts. Without a Guest URL, the sidebar builds those links from
+the host name and Network port the Supervisor reports, so a remapped port is
+followed automatically.
 
 ### Docker Compose
 

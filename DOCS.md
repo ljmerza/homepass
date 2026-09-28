@@ -19,6 +19,8 @@ For direct port access (e.g., `http://<your-ha-ip>:5880/admin/dashboard`), set *
 3. The guest opens the link on their phone. No app install or HA account needed.
 4. When the token expires, the guest sees the contact message and can no longer control devices.
 
+Without a **Guest URL**, links copied from the HA side panel point at this machine's host name and the add-on's **Network** port, both read from the Supervisor. Remap the port (or rename the host) and new links follow it. If you disable the port, the dashboard warns you, because nothing outside Home Assistant can reach a guest link then.
+
 The slug in the link is the credential: anyone holding the link has the access. Share it the way you would share a password, and use **Revoke** or **Rotate Link** if it ends up somewhere it should not be.
 
 ## Configuration

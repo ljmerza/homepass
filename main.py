@@ -14,7 +14,7 @@ from app import database as db
 from app import ha_client
 from app.config import settings
 from app.context import base_context
-from app.ingress import get_ingress_path
+from app.ingress import get_guest_link_target, get_ingress_path
 from app.models import NEVER_EXPIRES_SECONDS
 from app.rate_limiter import rate_limiter
 from app.routers import admin, guest
@@ -151,10 +151,17 @@ async def root(request: Request):
 @app.get("/admin/dashboard", include_in_schema=False)
 async def admin_dashboard_page(request: Request):
     ctx = base_context(request)
+    is_ingress = bool(ctx["base_path"])
+    # Only the sidebar needs the Supervisor lookup: there the admin is on HA's
+    # origin and guest links have to point at the add-on's published port.
+    # Direct-port admins link to their own origin, and a Guest URL beats both.
+    target = await get_guest_link_target() if is_ingress and not settings.guest_url else None
     ctx.update({
         "never_expires": NEVER_EXPIRES_SECONDS,
-        "is_ingress": bool(ctx["base_path"]),
+        "is_ingress": is_ingress,
         "guest_url": settings.guest_url,
+        "direct_guest_base": target.base_url if target else "",
+        "guest_port_unpublished": bool(target and not target.published),
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 

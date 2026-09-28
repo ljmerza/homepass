@@ -108,6 +108,15 @@
 
   <main class="max-w-4xl mx-auto px-5 py-6">
     <h2 class="sr-only">Guest Tokens</h2>
+    {% if guest_port_unpublished %}
+    <!-- Supervisor says 5880/tcp has no host port, so a direct guest link built
+         here would point at nothing. Said once, up front, rather than on every
+         copy of a link that cannot work. -->
+    <div id="guest-port-warning" role="alert" class="flex items-start gap-2.5 mb-6 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-sm text-amber-700 dark:text-amber-400">
+      <span aria-hidden="true" class="material-symbols-outlined text-lg">link_off</span>
+      <span>The add-on's Network port is disabled, so guest links can't be opened from outside Home Assistant. Enable it under <span class="font-medium">Settings → Add-ons → HomePass → Network</span>, or set a <span class="font-medium">Guest URL</span>.</span>
+    </div>
+    {% endif %}
     <!-- Create Token Button -->
     <button data-action="open-create-modal" class="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors flex items-center justify-center gap-2 mb-6 shadow-lg shadow-primary/20">
       <span aria-hidden="true" class="material-symbols-outlined text-lg">add_circle</span>
@@ -430,11 +439,16 @@
 <script nonce="{{ csp_nonce }}">
 const BASE = '{{ base_path }}';
 const IS_INGRESS = {{ 'true' if is_ingress else 'false' }};
-const GUEST_URL = '{{ guest_url }}';
+// tojson rather than a quoted interpolation: these are JavaScript literals,
+// and HTML-escaping a value is not the same as making it safe inside one.
+const GUEST_URL = {{ guest_url|tojson }};
+// The add-on's published Network port on the HA host, as Supervisor reports it.
+// Only filled in for the sidebar without a Guest URL, the one case that needs it.
+const DIRECT_GUEST_BASE = {{ direct_guest_base|tojson }};
 
 function guestLink(slug) {
   if (GUEST_URL) return `${GUEST_URL}/g/${slug}`;
-  if (IS_INGRESS) return `http://homeassistant.local:5880/g/${slug}`;
+  if (IS_INGRESS) return `${DIRECT_GUEST_BASE || 'http://homeassistant.local:5880'}/g/${slug}`;
   return `${location.origin}/g/${slug}`;
 }
 let allEntities = [];

@@ -202,6 +202,12 @@ class TokenCreateRequest(BaseModel):
     # existed. Stored even when no PIN is set, so a PIN added later inherits
     # the choice made here.
     remember_pin: bool = True
+    # Lock the link to the first browser that claims it. Off by default.
+    device_binding: bool = False
+    # ISO 3166-1 alpha-2 codes. Validated and upper-cased in the router, which
+    # checks them against the GeoIP database actually installed — a code that
+    # database has no addresses for would lock every guest out.
+    country_allowlist: list[str] | None = None
 
 
 class TokenRememberPinRequest(BaseModel):
@@ -225,6 +231,11 @@ class AccessCodeCreateRequest(BaseModel):
     label: str | None = Field(default=None, max_length=ACCESS_CODE_LABEL_MAX)
 
 
+class TokenDeviceBindingRequest(BaseModel):
+    """Turn single-device binding on or off. Either direction clears the claim."""
+    enabled: bool
+
+
 class TokenPinRequest(BaseModel):
     """Set, replace, or clear a token's PIN. Null or blank clears it.
 
@@ -246,12 +257,14 @@ class EntityMetaRequest(BaseModel):
 
     require_proximity is a sibling of `options`, not a member of it: it is an
     access control the command path enforces, and `options` is the blob nothing
-    in that path reads.
+    in that path reads. require_local_network sits beside it for the same
+    reason.
     """
     entity_id: str = Field(..., min_length=1, max_length=255)
     display_name: str | None = Field(default=None, max_length=DISPLAY_NAME_MAX)
     options: dict[str, Any] | None = None
     require_proximity: bool = False
+    require_local_network: bool = False
 
 
 class TokenUpdateExpiryRequest(BaseModel):

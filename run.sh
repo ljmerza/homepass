@@ -17,6 +17,7 @@ mapping = {
     'brand_primary': 'BRAND_PRIMARY',
     'guest_url': 'GUEST_URL',
     'timezone': 'TIMEZONE',
+    'local_network_cidrs': 'LOCAL_NETWORK_CIDRS',
 }
 for key, env in mapping.items():
     val = opts.get(key, '')

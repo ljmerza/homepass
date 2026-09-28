@@ -25,8 +25,11 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 
 from app import database as db
+from app import device_binding
+from app import geoip
 from app import guest_pin
 from app import ha_client
+from app import local_network
 from app import proximity
 from app import schedule
 from app.build import BUILD_VERSION, STATIC_DIR
@@ -128,22 +131,23 @@ _CAMERA_ENTITY_RE = re.compile(r"^camera\.[a-z0-9_]+$")
 # L-8: Whitelist of allowed SSE event types
 _ALLOWED_SSE_EVENTS = {
     "state_change", "token_expired", "token_activated", "schedule_changed",
-    "window_closed", "reconnected",
+    "window_closed", "reconnected", "device_unbound",
 }
 
 # The subset a stream opened outside a token's access — before its start time,
 # or between two of its weekly windows — may forward. No member carries device
 # data: one says the link is now live, one that it is gone, one that the admin
-# changed its timing and the page should ask again. state_change and
-# reconnected are deliberately absent — a pending guest must not receive real
-# Home Assistant state, and filtering here means the frames are never
-# serialised rather than merely ignored by the page.
-_PENDING_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed"}
+# changed its timing and the page should ask again, and one that this device no
+# longer holds it. state_change and reconnected are deliberately absent — a
+# pending guest must not receive real Home Assistant state, and filtering here
+# means the frames are never serialised rather than merely ignored by the page.
+_PENDING_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed", "device_unbound"}
 
 # Events after which a stream hangs up. Each one means the page is about to
-# reload or has nothing left to show, and a stream that stayed open would keep
-# relaying on the terms it was opened under rather than the current ones.
-_TERMINAL_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed"}
+# reload — into the live page, the countdown or the claim screen — or has
+# nothing left to show, and a stream that stayed open would keep relaying on
+# the terms it was opened under rather than the current ones.
+_TERMINAL_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed", "device_unbound"}
 
 # M-27: Simple TTL cache for HA state list
 _states_cache: list[dict] | None = None
@@ -248,6 +252,36 @@ def _enforce_ip_allowlist(row, request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed")
 
 
+async def _enforce_country_allowlist(row, request: Request) -> None:
+    """Refuse a request whose address the GeoIP database does not place in one
+    of the token's countries.
+
+    Sits beside the IP allowlist and is enforced everywhere that is: every
+    guest route, the page, the PIN form and the claim. Both apply when a token
+    has both.
+
+    The home network passes. A LAN address has no country to look up, and a
+    guest on the house Wi-Fi opening the link directly is the last person this
+    is meant to stop; the local_network_cidrs option is what says which
+    addresses those are, so an install that has not set it gets no exemption.
+
+    Fails closed: an address with no country (private space other than the home
+    network, unassigned blocks, "unknown") is refused, and so is every address
+    when no database is installed — an allowlist that opens when it cannot
+    check is not an allowlist.
+    """
+    raw = row["country_allowlist"]
+    if not raw:
+        return
+    client_ip = _client_ip(request)
+    if local_network.contains(client_ip):
+        return
+    allowed: list[str] = json.loads(raw)
+    country = await geoip.country_for(client_ip)
+    if country is None or country not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Country not allowed")
+
+
 async def _pin_gate_ok(row, request: Request) -> bool:
     """True if this token carries no PIN, or this request already proved it.
 
@@ -275,6 +309,61 @@ async def _pin_gate_ok(row, request: Request) -> bool:
     if claims.access_code_id is None:
         return True
     return await db.access_code_exists(row["id"], claims.access_code_id)
+
+
+def _device_gate_ok(row, request: Request) -> bool:
+    """True if this token is not device-bound, or this request is the bound device.
+
+    A token with binding off — the default — returns before any cookie is read.
+    A bound token nobody has claimed yet returns False: until the first device
+    claims it through POST /bind, it is closed to every device, which is what
+    stops a script holding only the slug from reading state without ever
+    committing to being the one device.
+    """
+    if not row["device_binding"]:
+        return True
+    return device_binding.verify(
+        request.cookies.get(device_binding.COOKIE), row["device_secret_hash"]
+    )
+
+
+def _refuse_device(row) -> None:
+    """Refuse a request from a device that does not hold this token's binding.
+
+    403, like the IP allowlist: the link is live, this device just may not use
+    it. The body is a dict so the guest page can tell this refusal from every
+    other 403 and reload into the server's explanation, instead of showing a
+    generic "command failed" to a guest whose problem is which phone they are on.
+    Nothing here says which device holds it or when it was claimed.
+    """
+    if row["device_secret_hash"]:
+        message = "This link is already in use on another device"
+    else:
+        message = "This link has not been set up on this device yet"
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"error": message, "device": True},
+    )
+
+
+def _set_device_cookie(response: Response, request: Request, slug: str, secret: str) -> None:
+    response.set_cookie(
+        device_binding.COOKIE,
+        secret,
+        httponly=True,
+        # Lax, not Strict, for the same reason as the PIN cookie: a guest link
+        # is always arrived at from somewhere else — a message, an email — and
+        # Strict withholds the cookie on exactly that cross-site navigation, so
+        # the bound device would arrive looking like a stranger and be refused
+        # on its own link. Lax still keeps it off cross-site POSTs. The slug is
+        # the credential; this cookie only ever narrows who may use it.
+        samesite="lax",
+        secure=_is_https(request),
+        max_age=device_binding.COOKIE_MAX_AGE_SECONDS,
+        # Same scoping as the PIN cookie, for the same reasons — including the
+        # ingress prefix, without which the browser would never send it back.
+        path=_pin_cookie_path(request, slug),
+    )
 
 
 def _is_https(request: Request) -> bool:
@@ -481,6 +570,11 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
     both camera endpoints reachable with nothing but the slug — the camera pair
     being the worst of it, since those relay live frames.
 
+    The device-binding gate sits here for the same reason. A bound token checks
+    the device cookie on every one of those routes, so a forwarded link that is
+    refused at the page is refused just the same by a script calling /state or
+    /command directly.
+
     The scheduled-start gate sits here for the same reason and defaults closed:
     a pending token is not an active token, so a route added later is refused
     before its start time unless it opts out. /stream is the one that does —
@@ -492,8 +586,12 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
     Order matters. The PIN is checked first, so a locked token that is also
     scheduled answers "PIN required" and never "starts Tuesday": the pending
     preview names every entity on the link, and that is not something to hand
-    to someone who has not proved the PIN. Revocation, expiry and a spent use
-    limit come before both — a dead token is dead whatever its schedule said.
+    to someone who has not proved the PIN. The device check follows the PIN, so
+    a second phone holding a PIN-protected link learns nothing — not even that
+    the link is claimed — until it has proved the PIN; and it precedes the
+    schedule, so the preview is withheld from a device that is not the bound
+    one. Revocation, expiry and a spent use limit come before all of them — a
+    dead token is dead whatever its schedule said.
     """
     row = await db.get_token_by_slug(slug)
     if not row:
@@ -503,9 +601,13 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
     _enforce_ip_allowlist(row, request)
+    await _enforce_country_allowlist(row, request)
 
     if not await _pin_gate_ok(row, request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN required")
+
+    if not _device_gate_ok(row, request):
+        _refuse_device(row)
 
     if not allow_pending:
         access = await _access(row)
@@ -573,6 +675,37 @@ async def _enforce_proximity(row, body: CommandRequest) -> None:
             token_id,
             status.HTTP_403_FORBIDDEN,
             "You need to be at the property to use this",
+        )
+
+
+async def _enforce_local_network(row, body: CommandRequest, request: Request) -> None:
+    """Refuse a home-network-only entity's command from outside the home network.
+
+    Per entity, like the proximity gate beside it, rather than one add-on-wide
+    rule for a fixed list of domains. The add-on option says what the home
+    network is — a fact about the house, set once. Which controls need it is a
+    decision about each guest: the cleaner's front-door lock, not the lamp; the
+    garage for the neighbour watering plants, but not for the house-sitter who
+    may need it opened from the road. A domain list would also miss whatever it
+    did not name, alarm_control_panel's disarm among them.
+
+    Viewing is never gated: the entity's state and the page itself work from
+    anywhere, and only this command path consults the flag.
+
+    Inert while local_network_cidrs is empty, which is what "empty turns the
+    feature off" has to mean for a link flagged before the option was cleared.
+    Not metered like the proximity refusal: the caller already knows its own
+    address, so a refusal tells it nothing, and the command limits apply.
+    """
+    if not local_network.is_configured():
+        return
+    gated = await db.get_local_network_entity_ids(row["id"])
+    if body.entity_id not in gated:
+        return
+    if not local_network.contains(_client_ip(request)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This control only works when you are on the home network",
         )
 
 
@@ -719,6 +852,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
 
     try:
         _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
@@ -736,6 +870,32 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
     # blocked by the IP allowlist above is not.
     if not await _pin_gate_ok(row, request):
         return _pin_page(request, slug)
+
+    # Device binding. Loading this page never claims anything, because this GET
+    # is exactly the request a chat app makes to build its link preview:
+    # claiming here spent the one binding on WhatsApp's fetcher seconds after a
+    # link was sent (reported against the fork this feature comes from). An
+    # unclaimed link gets the claim screen instead, whose button POSTs to /bind
+    # — preview fetchers only GET, and no User-Agent list has to be kept. The
+    # claim screen names neither the link nor anything on it, so the preview
+    # card a chat app builds from it leaks nothing about the home either.
+    if row["device_binding"]:
+        if not row["device_secret_hash"]:
+            ctx = base_context(request)
+            ctx.update({"slug": slug, "contact_message": settings.contact_message})
+            return templates.TemplateResponse(request, "device_claim.html", ctx)
+        if not _device_gate_ok(row, request):
+            # Logged, unlike the unanswered claim screen above: a refusal is
+            # the one trace that tells an admin a link has reached a second
+            # device — or that the guest's own browser lost its cookie — rather
+            # than simply never having been opened.
+            await db.log_access(
+                token_id=row["id"],
+                event_type="device_refused",
+                ip_address=_client_ip(request),
+                user_agent=request.headers.get("User-Agent"),
+            )
+            return _device_refused_page(request, slug)
 
     # A visit before the window opens is not an access: nothing is touched,
     # logged, or reported to HA, the same way an unanswered PIN prompt is not.
@@ -804,7 +964,91 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
         "preview_entity_ids": await db.get_token_entities(row["id"]) if pending else [],
         "preview_entity_meta": await db.get_token_entity_meta(row["id"]) if pending else {},
     })
-    return templates.TemplateResponse(request, "guest_pwa.html", ctx)
+    response = templates.TemplateResponse(request, "guest_pwa.html", ctx)
+    if row["device_binding"]:
+        # Re-issue the cookie the bound device just presented, restarting the
+        # browser's 400-day clock, so a long-lived link the guest keeps using
+        # never loses its binding to cookie expiry.
+        _set_device_cookie(
+            response, request, slug, request.cookies[device_binding.COOKIE]
+        )
+    return response
+
+
+def _device_refused_page(request: Request, slug: str) -> HTMLResponse:
+    ctx = base_context(request)
+    ctx.update({"slug": slug, "contact_message": settings.contact_message})
+    return templates.TemplateResponse(
+        request, "device_refused.html", ctx, status_code=status.HTTP_403_FORBIDDEN
+    )
+
+
+# ---------------------------------------------------------------------------
+# Device claim
+# ---------------------------------------------------------------------------
+
+@router.post("/{slug}/bind", response_class=HTMLResponse)
+async def guest_bind(request: Request, slug: str = Path(max_length=64)):
+    """Claim a device-bound link for the browser that asked.
+
+    A plain form POST from the claim screen, answered with a redirect back to
+    the page, the same shape as the PIN form. Split out of the page load so
+    that claiming takes a deliberate tap: link-preview fetchers and mail
+    scanners issue GETs, and none of them submits a form.
+
+    Every gate in front of the page applies here too — a claim is not a way
+    around the IP allowlist or the PIN — except the schedule: a guest who opens
+    the link before check-in can claim it then, and the countdown they land on
+    afterwards is served to their device and no other. The claim itself reveals
+    nothing, so there is no reason to make them come back to do it.
+    """
+    row = await db.get_token_by_slug(slug)
+    if not row or row["revoked"] or row["expires_at"] <= int(time.time()):
+        ctx = base_context(request)
+        ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
+
+    try:
+        _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
+    except HTTPException as exc:
+        ctx = base_context(request)
+        ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
+
+    back_to_page = RedirectResponse(
+        url=f"{request.state.ingress_path}/g/{slug}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+    # Not unlocked yet, or nothing to claim: the page is where either state is
+    # explained, so go back to it rather than restate it here. An admin may
+    # have turned binding off while the claim screen sat open.
+    if not _pin_gate_ok(row, request) or not row["device_binding"]:
+        return back_to_page
+
+    if row["device_secret_hash"]:
+        # A second tap on the same device, or a back-button resubmit, lands on
+        # the page it already owns. Anyone else is told the link is taken.
+        if _device_gate_ok(row, request):
+            return back_to_page
+        return _device_refused_page(request, slug)
+
+    secret = device_binding.new_secret()
+    if not await db.claim_device_binding(row["id"], device_binding.hash_secret(secret)):
+        # Lost the race to a device that claimed between our read and our
+        # write, or the admin turned binding off in the same instant. Either
+        # way this device holds nothing; the page says which.
+        return back_to_page
+
+    await db.log_access(
+        token_id=row["id"],
+        event_type="device_bound",
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+    )
+    _set_device_cookie(back_to_page, request, slug, secret)
+    return back_to_page
 
 
 # ---------------------------------------------------------------------------
@@ -833,6 +1077,7 @@ async def guest_pin_submit(
 
     try:
         _enforce_ip_allowlist(row, request)
+        await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
@@ -1206,6 +1451,10 @@ async def guest_command(
     # Last of the authorization checks, and before the payload ones, so a
     # malformed colour on a gated entity from off-site still answers "you need
     # to be at the property" rather than confirming the payload was fine.
+    # The network check goes first of the two: it is a comparison against an
+    # address already in hand, and a guest off the network should not be
+    # asked for their location only to be refused for something else.
+    await _enforce_local_network(row, body, request)
     await _enforce_proximity(row, body)
 
     # The colour wheel is the one widget that posts a structured value built

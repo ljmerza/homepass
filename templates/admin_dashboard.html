@@ -187,6 +187,12 @@
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
       <div>
+        <label for="f-countries" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Countries <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <input id="f-countries" type="text" placeholder="{{ 'GB, IE' if geoip_available else 'GeoIP database not installed' }}" {{ '' if geoip_available else 'disabled' }}
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono uppercase outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+        <p class="text-xs text-muted mt-1">Comma-separated ISO country codes. The link only opens from addresses registered to those countries, plus your home network. VPNs and roaming can move a guest across a border. <a class="underline" href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a>.</p>
+      </div>
+      <div>
         <label for="f-pin" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">PIN <span class="text-muted/60 normal-case tracking-normal">(optional, 4-8 digits)</span></label>
         <input id="f-pin" type="text" inputmode="numeric" maxlength="8" placeholder="Leave blank for no PIN"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
@@ -196,6 +202,13 @@
           <span class="text-sm">Remember the PIN on the guest's device</span>
         </label>
         <p class="text-xs text-muted mt-1 ml-6.5">Off, the guest enters the PIN again every time they reopen the link.</p>
+      </div>
+      <div>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input id="f-device-binding" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+          <span class="text-sm">Lock to one device</span>
+        </label>
+        <p class="text-xs text-muted mt-1 ml-6.5">The first browser to tap <span class="font-medium">Use this device</span> on the link keeps it; every other device is refused. A chat app's built-in browser counts as a separate device. Reset it from the token's card.</p>
       </div>
       <div>
         <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Entities</label>
@@ -247,6 +260,14 @@
       </label>
       <p class="text-[11px] text-muted mt-1.5 ml-6.5">Off by default. The guest's browser is asked for its location when they press this one control, and the command only goes through if that position falls inside Home Assistant's <span class="font-mono">zone.home</span>. Everything else on the link is unaffected.</p>
       <p class="text-[11px] text-muted mt-1.5 ml-6.5">The guest link must be served over HTTPS — browsers withhold location on plain HTTP and the control will refuse. The position is self-reported by the browser, so treat this as a deterrent for a casual guest, not proof anyone is really there.</p>
+    </div>
+
+    <div id="entity-local-network" class="mt-4 pt-4 border-t border-border-light dark:border-border-dark hidden">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="entity-require-local-network" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">Only from the home network</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">The guest can see this control from anywhere, but pressing it only works from <span id="entity-local-network-ranges" class="font-mono"></span>. Ticked automatically for locks, covers and buttons. It relies on the client address your reverse proxy reports, the same as the IP allowlist.</p>
     </div>
 
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
@@ -471,6 +492,10 @@
 const BASE = '{{ base_path }}';
 const IS_INGRESS = {{ 'true' if is_ingress else 'false' }};
 const GUEST_URL = '{{ guest_url }}';
+// The add-on's home-network ranges. Empty means the "only from the home
+// network" gate is off, and the dashboard neither offers nor pre-ticks it.
+const LOCAL_NETWORKS = {{ local_networks | tojson }};
+const LOCAL_NETWORK_CONFIGURED = LOCAL_NETWORKS.length > 0;
 
 function guestLink(slug) {
   if (GUEST_URL) return `${GUEST_URL}/g/${slug}`;
@@ -592,11 +617,18 @@ function renderActivity() {
   const visibleActivity = activityExpanded ? activity : activity.slice(0, ACTIVITY_COLLAPSED_COUNT);
   list.innerHTML = visibleActivity.map(a => {
     const isCommand = a.activity === 'command';
-    const icon = isCommand ? 'touch_app' : 'link';
     const tokenLabel = a.token_label || 'Deleted token';
+    // Device-lock events read as what happened to the link, not as an open:
+    // a refusal logged as "opened link" is how a link eaten by the wrong
+    // device used to look exactly like one nobody had tried.
+    const deviceTitles = {
+      device_bound: ['phonelink_lock', `${esc(tokenLabel)} claimed on a device`],
+      device_refused: ['block', `${esc(tokenLabel)} refused another device`],
+    };
+    const icon = isCommand ? 'touch_app' : (deviceTitles[a.activity] || ['link'])[0];
     const title = isCommand
       ? `${esc(tokenLabel)} used ${esc(a.service || 'command')}`
-      : `${esc(tokenLabel)} opened link`;
+      : (deviceTitles[a.activity] || [null, `${esc(tokenLabel)} opened link`])[1];
     const detail = isCommand && a.target_entity_id
       ? esc(a.target_entity_id)
       : (a.ip_address ? esc(a.ip_address) : 'Guest page');
@@ -781,6 +813,14 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-base">lan</span>
             <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : 'Any IP'}</span>
           </div>
+          ${t.country_allowlist ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">public</span>
+            <span>${esc(t.country_allowlist.join(', '))}</span>
+          </div>` : ''}
+          ${t.device_binding ? `<div class="flex items-center gap-2 ${t.device_bound_at ? 'text-ink' : 'text-muted'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">${t.device_bound_at ? 'phonelink_lock' : 'smartphone'}</span>
+            <span>${t.device_bound_at ? `Device bound ${relativeTime(t.device_bound_at)}` : 'Awaiting first device'}</span>
+          </div>` : ''}
         </div>
 
         <div class="grid grid-cols-3 gap-2">
@@ -835,6 +875,16 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR without PIN
           </button>
         </div>` : ''}
+        <div class="grid ${t.device_binding ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-enabled="${t.device_binding ? 'true' : 'false'}" data-action="confirm-device-binding"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border transition-colors ${t.device_binding ? 'border-ink/30 text-ink bg-ink/10 hover:bg-ink/20' : 'border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5'}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.device_binding ? 'phonelink_lock' : 'smartphone'}</span> ${t.device_binding ? 'One Device Only' : 'Lock to One Device'}
+          </button>
+          ${t.device_binding ? `<button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-unbind" ${t.device_bound_at ? '' : 'disabled'}
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors disabled:opacity-40 disabled:pointer-events-none" title="Let the next device to open the link claim it">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">link_off</span> Unbind Device
+          </button>` : ''}
+        </div>
         ${status === 'scheduled' ? `<div class="mt-2">
           <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-action="confirm-activate"
             class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-colors">
@@ -880,6 +930,21 @@ async function loadTemplates() {
 // sensors never reach the command handler the proximity check lives in, so the
 // toggle is hidden rather than offered and then quietly ignored.
 const PROXIMITY_EXEMPT_DOMAINS = ['sensor', 'binary_sensor', 'camera', 'schedule'];
+
+// Access-type domains — the ones that open something physical. With a home
+// network configured, adding one of these to a link ticks "only from the home
+// network" for it, so the add-on option does what its description says without
+// the admin hunting for the toggle on every lock. It is only a default: untick
+// it per entity to let a trusted guest open the garage from the road.
+const LOCAL_NETWORK_DEFAULT_DOMAINS = ['lock', 'cover', 'button', 'input_button'];
+
+function applyEntityDefaults(pickerState, entityId) {
+  if (!LOCAL_NETWORK_CONFIGURED || pickerState.meta[entityId]) return;
+  if (!LOCAL_NETWORK_DEFAULT_DOMAINS.includes(entityId.split('.')[0])) return;
+  pickerState.meta[entityId] = {
+    display_name: null, options: null, require_proximity: false, require_local_network: true,
+  };
+}
 
 // ── Entity Picker Component ───────────────────────────────────────────
 // Derived from DOMAIN_ORDER so a domain added in domains.js gets a chip
@@ -1003,6 +1068,7 @@ function renderPicker(containerId, pickerState) {
           const showsBrightness = m.options && m.options.show_brightness;
           const showsColor = m.options && m.options.show_color;
           const gated = m.require_proximity;
+          const localOnly = LOCAL_NETWORK_CONFIGURED && m.require_local_network;
           return `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-edit" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="Edit ${esc(renamed || e.friendly_name || e.entity_id)}">
           <div class="w-7 h-7 rounded-full ${DOMAIN_COLORS[e.domain]?.icon || 'bg-gray-500'} flex items-center justify-center flex-shrink-0">
             <span aria-hidden="true" class="material-symbols-outlined text-white text-sm">${PICKER_ICONS[e.domain] || 'devices'}</span>
@@ -1014,6 +1080,7 @@ function renderPicker(containerId, pickerState) {
               ${showsBrightness ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Brightness slider shown">brightness_high</span>' : ''}
               ${showsColor ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Colour controls shown">palette</span>' : ''}
               ${gated ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="Guest must be at the property">location_on</span>' : ''}
+              ${localOnly ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="Only from the home network">wifi_lock</span>' : ''}
             </div>
             <div class="text-[11px] text-muted font-mono truncate">${esc(e.entity_id)}</div>
           </div>
@@ -1079,6 +1146,7 @@ function setPickerSearch(containerId, val) {
 
 function pickerAdd(containerId, entityId) {
   getPickerState(containerId).selected.add(entityId);
+  applyEntityDefaults(getPickerState(containerId), entityId);
   renderPicker(containerId, getPickerState(containerId));
 }
 
@@ -1101,7 +1169,10 @@ function pickerAddAll(containerId) {
   // rendering limit and a bulk add that honoured it would silently miss the
   // rest of a large label.
   const toAdd = pickerFiltered(pickerState).filter(e => !pickerState.selected.has(e.entity_id));
-  toAdd.forEach(e => pickerState.selected.add(e.entity_id));
+  toAdd.forEach(e => {
+    pickerState.selected.add(e.entity_id);
+    applyEntityDefaults(pickerState, e.entity_id);
+  });
   renderPicker(containerId, pickerState);
   if (toAdd.length) showToast(`Added ${toAdd.length} ${toAdd.length === 1 ? 'entity' : 'entities'}`, 'success');
 }
@@ -1120,7 +1191,11 @@ function loadTemplateInto(containerId, templateId) {
     // An entity renamed or removed in HA since the template was saved would
     // otherwise be put on a token that can never render or command it.
     if (!known.has(eid)) { missing++; return; }
-    if (!pickerState.selected.has(eid)) { pickerState.selected.add(eid); added++; }
+    if (!pickerState.selected.has(eid)) {
+      pickerState.selected.add(eid);
+      applyEntityDefaults(pickerState, eid);
+      added++;
+    }
   });
   renderPicker(containerId, pickerState);
 
@@ -1517,10 +1592,14 @@ function openCreateModal(preset = {}) {
   document.getElementById('f-label').value = preset.label || '';
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
+  document.getElementById('f-countries').value = (preset.countryAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
   // A policy, not a secret, so a duplicate carries it the way it carries the
   // IP allowlist — unlike the PIN itself, which is hashed and belongs to one guest.
   document.getElementById('f-remember-pin').checked = preset.rememberPin !== false;
+  // A duplicate keeps the lock setting but never the claim: the copy is for a
+  // different guest, whose device has not claimed anything yet.
+  document.getElementById('f-device-binding').checked = Boolean(preset.deviceBinding);
   document.getElementById('create-error').textContent = '';
   // A duplicate passes the source token's timing through
   // timingPresetFromToken, which keeps the start blank: a start time belongs
@@ -1538,6 +1617,9 @@ async function submitCreate() {
   const slug = document.getElementById('f-slug').value.trim() || null;
   const ipRaw = document.getElementById('f-ip').value.trim();
   const ipList = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
+  const countryRaw = document.getElementById('f-countries').value.trim();
+  const countryList = countryRaw
+    ? countryRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : null;
   const errEl = document.getElementById('create-error');
 
   const pin = document.getElementById('f-pin').value.trim() || null;
@@ -1554,8 +1636,10 @@ async function submitCreate() {
     entity_meta: createPicker.meta,
     ...timing.body,
     ip_allowlist: ipList,
+    country_allowlist: countryList,
     pin,
     remember_pin: document.getElementById('f-remember-pin').checked,
+    device_binding: document.getElementById('f-device-binding').checked,
   };
 
     const r = await fetch(`${BASE}/admin/tokens`, {
@@ -1589,6 +1673,8 @@ async function duplicateToken(tokenId) {
     ipAllowlist: token.ip_allowlist || [],
     timing: timingPresetFromToken(token, Date.now(), true),
     rememberPin: token.remember_pin,
+    deviceBinding: token.device_binding,
+    countryAllowlist: token.country_allowlist || [],
   });
 }
 
@@ -1622,6 +1708,11 @@ function openEntityModal(containerId, entityId) {
   document.getElementById('entity-proximity').classList.toggle('hidden', !gateable);
   document.getElementById('entity-require-proximity').checked =
     gateable && Boolean(meta.require_proximity);
+  const localGateable = gateable && LOCAL_NETWORK_CONFIGURED;
+  document.getElementById('entity-local-network').classList.toggle('hidden', !localGateable);
+  document.getElementById('entity-local-network-ranges').textContent = LOCAL_NETWORKS.join(', ');
+  document.getElementById('entity-require-local-network').checked =
+    localGateable && Boolean(meta.require_local_network);
 
   openModal('entity-modal');
   nameInput.focus();
@@ -1650,12 +1741,19 @@ function submitEntityMeta() {
   // column because the command path enforces it, and options is presentation.
   const gateable = !PROXIMITY_EXEMPT_DOMAINS.includes(entityId.split('.')[0]);
   const requireProximity = gateable && document.getElementById('entity-require-proximity').checked;
+  // Carried through untouched when the toggle is not on screen, so a flag set
+  // while a home network was configured is not silently cleared by an edit
+  // made after the option was emptied.
+  const requireLocalNetwork = gateable && (LOCAL_NETWORK_CONFIGURED
+    ? document.getElementById('entity-require-local-network').checked
+    : Boolean((pickerState.meta[entityId] || {}).require_local_network));
 
-  if (name || Object.keys(options).length || requireProximity) {
+  if (name || Object.keys(options).length || requireProximity || requireLocalNetwork) {
     pickerState.meta[entityId] = {
       display_name: name || null,
       options: Object.keys(options).length ? options : null,
       require_proximity: requireProximity,
+      require_local_network: requireLocalNetwork,
     };
   } else {
     delete pickerState.meta[entityId];
@@ -1985,6 +2083,37 @@ async function confirmRotate(id) {
   });
 }
 
+function confirmDeviceBinding(id, label, enabled) {
+  const turningOn = !enabled;
+  openConfirmModal(
+    turningOn ? 'Lock to One Device' : 'Remove Device Lock',
+    turningOn
+      ? `"${label}" will only work on the first device that claims it. A guest already using the link is asked to claim it on their next load.`
+      : `"${label}" will work on any device holding the link again, and the current device claim is released.`,
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/device-binding`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ enabled: turningOn }),
+      });
+      if (r.ok) { showToast(turningOn ? 'Link locked to one device' : 'Device lock removed', 'success'); loadTokens(); }
+      else showToast('Error updating device lock', 'error');
+    },
+  );
+}
+
+function confirmUnbind(id, label) {
+  openConfirmModal(
+    'Unbind Device',
+    `The device holding "${label}" is disconnected, and the next device to open the link and tap "Use this device" claims it. To keep the link from the current holder altogether, use Rotate Link instead.`,
+    async () => {
+      const r = await fetch(`${BASE}/admin/tokens/${id}/unbind`, { method: 'POST' });
+      if (r.ok) { showToast('Device unbound', 'success'); loadTokens(); loadActivity(); }
+      else showToast('Error unbinding device', 'error');
+    },
+  );
+}
+
 async function confirmDelete(id) {
   openConfirmModal('Delete Token', 'This will permanently remove the token record.', async () => {
     const r = await fetch(`${BASE}/admin/tokens/${id}`, {method: 'DELETE'});
@@ -2279,6 +2408,8 @@ document.addEventListener('click', e => {
     case 'confirm-revoke': confirmRevoke(el.dataset.id); break;
     case 'confirm-activate': confirmActivate(el.dataset.id, el.dataset.label); break;
     case 'confirm-rotate': confirmRotate(el.dataset.id); break;
+    case 'confirm-device-binding': confirmDeviceBinding(el.dataset.id, el.dataset.label, el.dataset.enabled === 'true'); break;
+    case 'confirm-unbind': confirmUnbind(el.dataset.id, el.dataset.label); break;
     case 'confirm-delete': confirmDelete(el.dataset.id); break;
 
     // Entity picker

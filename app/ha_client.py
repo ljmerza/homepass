@@ -200,6 +200,26 @@ async def broadcast_schedule_changed(token_id: str) -> None:
             pass
 
 
+async def broadcast_device_unbound(token_id: str) -> None:
+    """Push device_unbound to all SSE connections for a token.
+
+    Sent when an admin clears a token's device claim, or turns binding on or off
+    for a link. A stream is validated once, at connect, so without this the
+    device that just lost the link would keep receiving live state until it
+    happened to reconnect. Not token_expired: the link is still good, and the
+    guest page reloads into whatever the server now serves it — the claim
+    screen, usually — rather than the expired one.
+    """
+    event = {"type": "device_unbound"}
+    async with _sub_lock:
+        queues = set(_subscriptions.get(token_id, set()))
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # REST helpers (M-4: retry on transient HTTP errors)
 # ---------------------------------------------------------------------------

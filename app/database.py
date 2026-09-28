@@ -101,12 +101,15 @@ async def create_token(
     access_windows: list[dict[str, Any]] | None = None,
     max_uses: int | None = None,
     remember_pin: bool = True,
+    device_binding: bool = False,
+    country_allowlist: list[str] | None = None,
 ) -> dict[str, Any]:
     db = await get_db()
     token_id = str(uuid.uuid4())
     now = int(time.time())
     ip_json = json.dumps(ip_allowlist) if ip_allowlist else None
     windows_json = json.dumps(access_windows) if access_windows else None
+    country_json = json.dumps(country_allowlist) if country_allowlist else None
 
     # Deduplicate entity IDs
     entity_ids = list(dict.fromkeys(entity_ids))
@@ -116,17 +119,19 @@ async def create_token(
         await db.execute(
             """INSERT INTO tokens
                (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash,
-                access_windows, max_uses, remember_pin)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                access_windows, max_uses, remember_pin, device_binding, country_allowlist)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash,
-             windows_json, max_uses, int(bool(remember_pin))),
+             windows_json, max_uses, int(bool(remember_pin)), int(bool(device_binding)),
+             country_json),
         )
         if entity_ids:
             meta = entity_meta or {}
             await db.executemany(
                 "INSERT INTO token_entities "
-                "(token_id, entity_id, display_name, options, require_proximity) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "(token_id, entity_id, display_name, options, require_proximity, "
+                "require_local_network) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 [
                     (
                         token_id,
@@ -135,6 +140,7 @@ async def create_token(
                         json.dumps((meta.get(eid) or {}).get("options"))
                         if (meta.get(eid) or {}).get("options") else None,
                         int(bool((meta.get(eid) or {}).get("require_proximity"))),
+                        int(bool((meta.get(eid) or {}).get("require_local_network"))),
                     )
                     for eid in entity_ids
                 ],
@@ -144,6 +150,18 @@ async def create_token(
         await db.execute("ROLLBACK")
         raise
     return await get_token_by_id(token_id)  # type: ignore[return-value]
+
+
+async def any_country_allowlist() -> bool:
+    """Whether any live token restricts by country — i.e. whether the GeoIP
+    table will be needed. Revoked and expired tokens cannot reach the check."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM tokens WHERE country_allowlist IS NOT NULL "
+        "AND revoked = 0 AND expires_at > ? LIMIT 1",
+        (int(time.time()),),
+    ) as cur:
+        return await cur.fetchone() is not None
 
 
 async def get_token_by_slug(slug: str) -> aiosqlite.Row | None:
@@ -180,7 +198,7 @@ async def get_token_entities(token_id: str) -> list[str]:
 
 
 async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
-    """entity_id -> {"display_name": str|None, "options": dict, "require_proximity": bool}.
+    """entity_id -> {"display_name", "options", "require_proximity", "require_local_network"}.
 
     Kept separate from get_token_entities() on purpose: that function returns the
     plain id list the allowlist checks depend on, and must not grow a shape the
@@ -189,10 +207,12 @@ async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
     require_proximity rides alongside `options` rather than inside it, matching
     the storage: the blob is presentation, the column is an access control, and
     the command path reads the column through get_proximity_entity_ids().
+    require_local_network is the same shape for the same reason, read through
+    get_local_network_entity_ids().
     """
     db = await get_db()
     async with db.execute(
-        "SELECT entity_id, display_name, options, require_proximity "
+        "SELECT entity_id, display_name, options, require_proximity, require_local_network "
         "FROM token_entities WHERE token_id = ?",
         (token_id,),
     ) as cur:
@@ -210,6 +230,7 @@ async def get_token_entity_meta(token_id: str) -> dict[str, dict[str, Any]]:
             "display_name": r["display_name"],
             "options": opts,
             "require_proximity": bool(r["require_proximity"]),
+            "require_local_network": bool(r["require_local_network"]),
         }
     return meta
 
@@ -231,25 +252,45 @@ async def get_proximity_entity_ids(token_id: str) -> set[str]:
     return {r["entity_id"] for r in rows}
 
 
+async def get_local_network_entity_ids(token_id: str) -> set[str]:
+    """The entity IDs on this token that only take commands from the home network.
+
+    Same contract as get_proximity_entity_ids(): a set of the gated IDs and
+    nothing else, so the command path answers "does a gate apply" with one
+    membership test.
+    """
+    db = await get_db()
+    async with db.execute(
+        "SELECT entity_id FROM token_entities "
+        "WHERE token_id = ? AND require_local_network = 1",
+        (token_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return {r["entity_id"] for r in rows}
+
+
 async def set_entity_meta(
     token_id: str,
     entity_id: str,
     display_name: str | None,
     options: dict[str, Any] | None,
     require_proximity: bool = False,
+    require_local_network: bool = False,
 ) -> bool:
-    """Set one entity's display name, options and proximity gate.
+    """Set one entity's display name, options, proximity and home-network gates.
 
     False if the entity is not on the token.
     """
     db = await get_db()
     cur = await db.execute(
-        "UPDATE token_entities SET display_name = ?, options = ?, require_proximity = ? "
+        "UPDATE token_entities SET display_name = ?, options = ?, require_proximity = ?, "
+        "require_local_network = ? "
         "WHERE token_id = ? AND entity_id = ?",
         (
             display_name,
             json.dumps(options) if options else None,
             int(bool(require_proximity)),
+            int(bool(require_local_network)),
             token_id,
             entity_id,
         ),
@@ -272,12 +313,15 @@ async def update_token_entities(
         # already stored would be silently dropped unless they are read back first
         # and re-applied. An explicit entity_meta argument wins over what is stored.
         async with db.execute(
-            "SELECT entity_id, display_name, options, require_proximity "
+            "SELECT entity_id, display_name, options, require_proximity, require_local_network "
             "FROM token_entities WHERE token_id = ?",
             (token_id,),
         ) as cur:
             existing = {
-                r["entity_id"]: (r["display_name"], r["options"], r["require_proximity"])
+                r["entity_id"]: (
+                    r["display_name"], r["options"], r["require_proximity"],
+                    r["require_local_network"],
+                )
                 for r in await cur.fetchall()
             }
         for eid, m in (entity_meta or {}).items():
@@ -287,14 +331,16 @@ async def update_token_entities(
                 name,
                 json.dumps(opts) if opts else None,
                 int(bool(m.get("require_proximity"))),
+                int(bool(m.get("require_local_network"))),
             )
 
         await db.execute("DELETE FROM token_entities WHERE token_id = ?", (token_id,))
         await db.executemany(
             "INSERT INTO token_entities "
-            "(token_id, entity_id, display_name, options, require_proximity) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [(token_id, eid, *existing.get(eid, (None, None, 0))) for eid in entity_ids],
+            "(token_id, entity_id, display_name, options, require_proximity, "
+            "require_local_network) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(token_id, eid, *existing.get(eid, (None, None, 0, 0))) for eid in entity_ids],
         )
         await db.execute("COMMIT")
     except Exception:
@@ -337,6 +383,55 @@ async def set_token_remember_pin(token_id: str, remember_pin: bool) -> None:
     await db.execute(
         "UPDATE tokens SET remember_pin = ? WHERE id = ?",
         (int(bool(remember_pin)), token_id),
+    )
+    await db.commit()
+
+
+async def set_device_binding(token_id: str, enabled: bool) -> None:
+    """Turn single-device binding on or off. Either way the claim is cleared.
+
+    Off has nothing to keep it for. On starts unclaimed even on a token that was
+    bound before, because a claim left over from an earlier stint of binding was
+    made by whoever happened to hold the link then — turning the switch back on
+    is the admin asking for a fresh first device, not the old one.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET device_binding = ?, device_secret_hash = NULL, "
+        "device_bound_at = NULL WHERE id = ?",
+        (int(bool(enabled)), token_id),
+    )
+    await db.commit()
+
+
+async def claim_device_binding(token_id: str, secret_hash: str) -> bool:
+    """Record the first device's claim. True if this call made it.
+
+    The WHERE clause is the race guard: two browsers claiming at once both run
+    this, SQLite serialises the writes, and only the first finds the column
+    still NULL. The second gets False and is refused like any other device, with
+    no read-then-write window between the check and the claim.
+    """
+    db = await get_db()
+    cur = await db.execute(
+        "UPDATE tokens SET device_secret_hash = ?, device_bound_at = ? "
+        "WHERE id = ? AND device_binding = 1 AND device_secret_hash IS NULL",
+        (secret_hash, int(time.time()), token_id),
+    )
+    await db.commit()
+    return cur.rowcount > 0
+
+
+async def clear_device_binding(token_id: str) -> None:
+    """Release the claim so the next device to claim the link gets it.
+
+    Writing the hash away is the whole revocation: the old device's cookie no
+    longer matches anything, with no session rows to hunt down.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET device_secret_hash = NULL, device_bound_at = NULL WHERE id = ?",
+        (token_id,),
     )
     await db.commit()
 
@@ -444,13 +539,22 @@ async def rotate_token_slug(token_id: str, new_slug: str) -> None:
     Everything else stays put — entities and their overrides, expiry, the PIN
     hash, and the access_log rows, which are keyed on token id and so are not
     touched by a slug write at all. This is for handing the same configuration
-    to a new guest, not for building a second token. The one exception is the
-    token's PIN-free access links, which are dropped — see below.
+    to a new guest, not for building a second token. The two exceptions are the
+    token's PIN-free access links, which are dropped, and its device claim,
+    which is released — see below.
     """
     db = await get_db()
     try:
         await db.execute("BEGIN IMMEDIATE")
-        await db.execute("UPDATE tokens SET slug = ? WHERE id = ?", (new_slug, token_id))
+        # The device claim belongs to the guest the old link was sent to, and
+        # its cookie is scoped to the old slug's path, so the new link's guest
+        # could never present it — keeping the claim would lock the new link to
+        # a device that can no longer open it.
+        await db.execute(
+            "UPDATE tokens SET slug = ?, device_secret_hash = NULL, device_bound_at = NULL "
+            "WHERE id = ?",
+            (new_slug, token_id),
+        )
         # Every access link embeds the old slug, so each is already a dead URL —
         # and rotation is for handing the token to someone else, which is not
         # the person those links were minted for. Drop them rather than leave a

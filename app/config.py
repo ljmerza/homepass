@@ -1,3 +1,4 @@
+import ipaddress
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator, model_validator
@@ -25,6 +26,16 @@ class Settings(BaseSettings):
     # rare install whose HA zone is not the one its guests live by. See
     # app/schedule.py.
     timezone: str = ""
+    # Comma-separated CIDRs that count as "the home network", e.g.
+    # "192.168.1.0/24, fd00::/8". Entities marked require_local_network only
+    # accept commands from these ranges; empty turns that gate off. A plain
+    # string rather than list[str] because pydantic-settings would demand JSON
+    # for a list, and the add-on option is typed by a person.
+    local_network_cidrs: str = ""
+    # The offline IP-to-country database behind per-token country allowlists.
+    # The image bakes one in at build time (see the Dockerfile); a missing file
+    # is not an error, it only means no link can be given a country allowlist.
+    geoip_db_path: str = "/app/geoip/dbip-country-lite.csv.gz"
 
     @field_validator("timezone")
     @classmethod
@@ -46,6 +57,20 @@ class Settings(BaseSettings):
                 raise ValueError("admin_password must be at least 8 characters in standalone mode")
             if not self.admin_username:
                 raise ValueError("admin_username is required in standalone mode")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_local_network_cidrs(self):
+        # Refuse to start on a typo rather than drop the bad entry: a silently
+        # skipped range is a door button that stops working from the one
+        # network it was meant to work from, with nothing in the log to say why.
+        for cidr in (c.strip() for c in self.local_network_cidrs.split(",")):
+            if not cidr:
+                continue
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError:
+                raise ValueError(f"local_network_cidrs: invalid CIDR {cidr!r}")
         return self
 
 

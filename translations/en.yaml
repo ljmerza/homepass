@@ -23,3 +23,6 @@ configuration:
   timezone:
     name: Time Zone
     description: "IANA time zone for weekly access windows (e.g., Europe/Madrid). Leave empty to use Home Assistant's configured time zone."
+  local_network_cidrs:
+    name: Home Network Ranges
+    description: "Comma-separated CIDRs that count as your home network (e.g., 192.168.1.0/24). Controls marked 'Only from the home network' accept commands only from these. Leave empty to turn this off."

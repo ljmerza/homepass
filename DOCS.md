@@ -35,6 +35,7 @@ Set these options in the add-on Configuration tab:
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
 | **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
+| **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
@@ -60,6 +61,7 @@ Click a selected entity to open its options:
 - **Show brightness slider** (lights only) — off by default, so a light is on/off unless you turn this on.
 - **Show colour controls** (lights only) — also off by default. Gives the guest a colour wheel, a warm–cool temperature slider, or both, depending on what the bulb supports.
 - **Require the guest to be at the property** — see below.
+- **Only from the home network** — shown once **Home Network Ranges** is set. See below.
 
 These belong to the link, not the entity. The same light can be on/off for the cleaner and fully adjustable for a house guest.
 
@@ -106,6 +108,15 @@ A PIN-protected card has **Copy link without PIN** and **QR without PIN**. Each 
 - A link without PIN skips the PIN and nothing else. The IP allowlist, expiry, revocation and a scheduled start all still apply.
 - Up to 20 links per token.
 
+## Locking a link to one device
+
+Tick **Lock to one device** when creating a link, or use **Lock to One Device** on its card later. The guest sees a short "Use this device?" screen the first time; after they tap it, the link only works in that browser. Anyone else who opens it — a friend it was forwarded to, the guest's second phone — gets a page saying the link is in use on another device.
+
+- **Sharing the link in a chat app does not use it up.** The app's preview fetch only sees the "Use this device?" screen, which says nothing about your home. The link is claimed only when someone taps the button.
+- **It is tied to the browser, not the phone.** Some chat apps (Instagram, Facebook and others) open links in their own built-in browser, which counts as a different device. So does switching from Safari to Chrome, clearing cookies, and possibly adding the page to an iPhone home screen. The screens tell the guest to open the link in their normal browser first.
+- **Unbind Device** on the card lets the next device claim the link, which is the fix when a guest is locked out of their own link. **Rotate Link** also releases the claim, and gives the link to a new person.
+- Claims and refusals show up in **Recent activity**, so you can see when a link has reached a second device.
+
 ## Requiring the guest to be at the property
 
 Any controllable entity can be marked **Require the guest to be at the property**. When the guest presses that one control, their browser is asked where it is, and the command only goes through if the position falls inside Home Assistant's `zone.home`. It is per entity — you can gate the gate release and leave the living-room lamp alone.
@@ -115,6 +126,14 @@ Any controllable entity can be marked **Require the guest to be at the property*
 - **It fails closed.** No location, a location more than two minutes old, or a `zone.home` that cannot be read all refuse the command.
 
 `zone.home` is the Home zone under **Settings → Areas, labels & zones**. Its radius is what HomePass compares against, so widen it there if guests are being refused at the door.
+
+## Only from the home network
+
+Set **Home Network Ranges** in the add-on options, and any controllable entity can be marked **Only from the home network**. The guest still sees the control and its state wherever they are, but pressing it only works when they are connected to one of those ranges — your Wi-Fi, typically. Locks, covers and buttons are ticked for you when you add them to a link; untick one for a guest you trust to use it from anywhere.
+
+- **It relies on the address your reverse proxy reports**, the same as the IP allowlist.
+- **If guests use a public link at home**, through a tunnel or Nabu Casa, their requests may arrive from your public IP rather than a home address. Add your public IP to the ranges in that case.
+- **Clearing the option turns the check off** for every link, including entities already marked.
 
 ## Cameras
 
@@ -129,12 +148,15 @@ Each token's card offers:
 - **Edit Entities** — change what is on the link, including the per-entity options.
 - **Add PIN / PIN Protected** — set, change or remove the PIN, choose whether it is remembered, and manage links without PIN.
 - **Copy link without PIN / QR without PIN** — on PIN-protected links only; see above.
-- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, and links without PIN are retired.
-- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist, remember-PIN setting and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
+- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, links without PIN are retired, and a device lock is released.
+- **Lock to One Device / Unbind Device** — lock the link to the first browser that claims it, or release the claim so the next device can take it.
+- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist, country allowlist, device-lock and remember-PIN settings, and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 
 **IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It only means anything if HomePass sits behind a reverse proxy that overwrites the client address; on a bare LAN setup it is easy to bypass. To change it later, duplicate the link and revoke the old one.
+
+**Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
 
 **Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
 

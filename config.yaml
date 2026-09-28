@@ -26,6 +26,7 @@ options:
   brand_primary: "#D9523C"
   guest_url: ""
   timezone: ""
+  local_network_cidrs: ""
 schema:
   admin_username: "str?"
   admin_password: "password?"
@@ -35,4 +36,5 @@ schema:
   brand_primary: str
   guest_url: "str?"
   timezone: "str?"
+  local_network_cidrs: "str?"
 image: "ghcr.io/ljmerza/homepass"

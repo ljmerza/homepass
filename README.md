@@ -31,7 +31,9 @@ installs, just a link.
 - **Single-use links** — a link that stops after one (or N) guest commands; opening it or a chat-app preview never uses it up
 - **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint,
   with revocable links that skip it and a per-link choice of whether it is remembered
+- **Single-device lock** — optionally lock a link to the first browser that claims it; other devices are refused
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
+- **Home-network-only controls** — mark individual entities as commandable only from your home network's IP ranges
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
@@ -44,6 +46,7 @@ installs, just a link.
 - **Service allowlist** — only the services a domain's guest controls actually call are permitted
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
 - **IP allowlisting** — optionally restrict tokens to specific CIDRs
+- **Country allowlisting** — optionally restrict a link to visitors from chosen countries, using an offline GeoIP database
 
 ## Installation
 
@@ -119,6 +122,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
 | **Time Zone** | IANA zone for weekly access windows (e.g. `Europe/Madrid`); empty uses Home Assistant's | — |
+| **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g. `192.168.1.0/24`). Empty turns home-network-only controls off | — |
 
 ### Docker Environment Variables
 
@@ -137,6 +141,8 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
 | `TIMEZONE` | IANA zone for weekly access windows; unset uses Home Assistant's | No | — |
+| `LOCAL_NETWORK_CIDRS` | Comma-separated CIDRs that count as the home network | No | — |
+| `GEOIP_DB_PATH` | IP-to-country CSV for country allowlists (see below) | No | `/app/geoip/dbip-country-lite.csv.gz` |
 
 ## Home Assistant Activity Events
 
@@ -289,6 +295,37 @@ expiry or revocation. The session it sets names the link, so revoking or
 rotating a link signs out the devices it let in. Changing or clearing the PIN,
 or rotating the slug, deletes every link. Up to 20 per token.
 
+### Single-device lock
+
+Optional and off by default, set when the link is created or later with **Lock
+to One Device** on its card. The link then belongs to the first browser that
+taps **Use this device** on it; every other device gets a "link in use on
+another device" page, and every guest endpoint — the page, the state feed, the
+SSE stream, commands and both camera routes — refuses it.
+
+- **Opening the link never claims it.** Chat apps fetch a pasted link to build a
+  preview card, and a claim on page load would hand the link to that fetcher
+  before the guest ever tapped it. Claiming is a form POST from the claim
+  screen, which names neither the link nor anything on it.
+- **"One device" means one browser's cookies.** The claim is an `HttpOnly`,
+  `SameSite=Lax` cookie scoped to the link; only its SHA-256 is stored. A guest
+  who clears cookies, switches browsers, or claimed the link inside a chat app's
+  built-in browser (Instagram, Facebook and some others keep their own cookie
+  jar) is refused like a stranger. That is the tradeoff: HomePass does not guess
+  which of two browsers is "really" the guest, because any rule loose enough to
+  let the guest's other browser in lets a forwarded link in too. The claim screen
+  tells the guest to open the link in their normal browser first, the refusal
+  page says the same, and **Unbind Device** on the card lets the next device
+  claim it. On iOS a Home Screen web app may also keep cookies separate from
+  Safari, so a guest who adds the page to their home screen after claiming may
+  need an unbind.
+- **Rotate Link releases the claim**, since it hands the link to someone new.
+  Extending or renewing keeps it. Claims and refusals appear in Recent Activity.
+
+With a PIN as well, the PIN comes first: a second device learns nothing about
+the link, not even that it is claimed, until it has entered the PIN. A
+scheduled link can be claimed before it opens.
+
 ### Proximity requirement
 
 Per entity, off by default. With it on, pressing that one control asks the
@@ -308,6 +345,32 @@ Two limitations, both real:
 
 It fails closed: no fix, a fix older than two minutes, or a `zone.home` that
 cannot be read all refuse the command.
+
+### Home network only
+
+Per entity, off by default, and only offered once **Home Network Ranges** is
+set. The guest can see the control from anywhere, but a command for it only goes
+through when the request comes from one of those ranges — the house Wi-Fi, for
+instance. Adding a lock, cover, button or input button to a link ticks it
+automatically; untick it for a guest who needs the garage from the road. Other
+entities on the link are unaffected, and an empty option turns every flag off.
+
+It is per entity rather than a fixed rule for those domains, matching the
+proximity requirement: the add-on option says what the home network is, and
+each link says which controls need it — including ones a domain list would miss,
+like an alarm panel's disarm.
+
+The check uses the same client address as the IP allowlist, so the same caveat
+applies: it needs a reverse proxy that overwrites `X-Forwarded-For` with the real
+client address. Two setups need thought:
+
+- **Tunnels and public URLs.** A guest on your Wi-Fi who opens the public link
+  (a Cloudflare Tunnel, Nabu Casa, or hairpin NAT) usually reaches HomePass from
+  your public IP, not a LAN address. Add your public address to the ranges, or
+  have LAN clients resolve the guest hostname to the LAN address.
+- **Being on the network is not being at the door.** Anyone on the Wi-Fi, or on
+  a VPN into it, passes. Combine it with the proximity requirement if that
+  matters.
 
 ### Per-entity display options
 
@@ -342,6 +405,35 @@ An optional comma-separated list of CIDRs, set when the link is created. It
 requires a reverse proxy that overwrites `X-Forwarded-For` with the real client
 address; without one, a client can claim any address it likes.
 
+### Country allowlist
+
+An optional comma-separated list of ISO country codes (`GB, IE`), set when the
+link is created. The whole link — page, state, stream, commands, cameras, the
+PIN and claim forms — then only opens from addresses registered to one of those
+countries. Addresses inside **Home Network Ranges** always pass, since a LAN
+address has no country; any other address the database cannot place is refused,
+and so is everything if no database is installed. Codes are checked against the
+installed database when the link is created, so a typo like `UK` (for `GB`) is
+rejected rather than locking every guest out. It applies alongside the IP
+allowlist, and carries the same reverse-proxy requirement.
+
+It is coarse by nature: it says where an address is registered, not where the
+guest is. A VPN, a corporate network or a roaming SIM can put a guest in another
+country without their moving.
+
+The lookup is offline. The image downloads DB-IP's free **IP to Country Lite**
+database when it is built and reads it from disk, so guest addresses are never
+sent anywhere. That database is licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), which allows shipping
+it in the image with attribution: [IP Geolocation by DB-IP](https://db-ip.com).
+It is refreshed monthly upstream and each image carries the copy current at its
+build, so accuracy slowly drifts until the next release. For Docker installs,
+`GEOIP_DB_PATH` can point at a newer file in the same layout
+(`first_ip,last_ip,country_code` CSV, optionally gzipped). The table is loaded
+in the background at startup when a live link has a country allowlist, or on
+first use otherwise — a second or two of parsing, longer on a Raspberry Pi, and
+roughly 10 MB of memory. Installs with no country-restricted link never load it.
+
 ## Limits
 
 Hardcoded, not configurable.
@@ -369,6 +461,7 @@ Browser (Guest PWA)
     ├── GET  /g/{slug}               → PWA shell (HTML), or the PIN screen
     │         ?c=<code>              → link without PIN: sets the session, redirects
     ├── POST /g/{slug}/pin           → PIN entry
+    ├── POST /g/{slug}/bind          → claim a device-locked link
     ├── GET  /g/{slug}/manifest.json → PWA manifest
     ├── GET  /g/{slug}/state         → initial entity states
     ├── GET  /g/{slug}/stream        → SSE real-time updates

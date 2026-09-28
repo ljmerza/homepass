@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from app import database as db
 from app.auth import INGRESS_SENTINEL, SESSION_COOKIE, require_admin, verify_password
 from app.config import settings
+from app import geoip
 from app import guest_pin
 from app import ha_client
 from app import schedule
@@ -26,6 +27,7 @@ from app.models import (
     SUPPORTED_DOMAINS,
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
+    TokenDeviceBindingRequest,
     TokenPinRequest,
     TokenRememberPinRequest,
     TokenScheduleRequest,
@@ -183,6 +185,7 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
                      entity_meta: dict[str, dict[str, Any]] | None = None) -> dict:
     ip_raw = row["ip_allowlist"]
     ip_list = json.loads(ip_raw) if ip_raw else None
+    country_raw = row["country_allowlist"]
     if entity_ids is not None:
         count = len(entity_ids)
     elif "entity_count" in row.keys():
@@ -202,6 +205,7 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
         "revoked": bool(row["revoked"]),
         "last_accessed": row["last_accessed"],
         "ip_allowlist": ip_list,
+        "country_allowlist": json.loads(country_raw) if country_raw else None,
         "entity_count": count,
         "entity_ids": entity_ids,
         "entity_meta": entity_meta,
@@ -219,6 +223,11 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
             max(0, row["max_uses"] - row["use_count"]) if row["max_uses"] is not None else None
         ),
         "remember_pin": bool(row["remember_pin"]),
+        # Whether the link is locked to one device, and when that device
+        # claimed it (None while unclaimed). The claim's secret hash never
+        # leaves the server, for the same reason the PIN hash does not.
+        "device_binding": bool(row["device_binding"]),
+        "device_bound_at": row["device_bound_at"],
     }
 
 
@@ -265,6 +274,8 @@ async def create_token(
                     detail=f"Invalid CIDR: {cidr}",
                 )
 
+    countries = await _clean_country_allowlist(body.country_allowlist)
+
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
     expires_at = _resolve_expiry(body.expires_in_seconds, body.expires_at, starts_at)
@@ -289,6 +300,8 @@ async def create_token(
         access_windows=_windows_or_none(body.access_windows),
         max_uses=body.max_uses,
         remember_pin=body.remember_pin,
+        device_binding=body.device_binding,
+        country_allowlist=countries,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
@@ -305,6 +318,35 @@ def _windows_or_none(windows: list[Any] | None) -> list[dict[str, Any]] | None:
     if not windows:
         return None
     return [w.model_dump() for w in windows]
+
+
+async def _clean_country_allowlist(codes: list[str] | None) -> list[str] | None:
+    """Upper-case, de-duplicate and check a country allowlist. Empty means none.
+
+    Checked against the countries the installed GeoIP database actually has
+    addresses for, not a static ISO list: "UK" is a plausible typo for "GB",
+    and a code the database never returns would refuse every guest, silently,
+    on a link that looked fine. No database at all is refused for the same
+    reason — the link could never be opened from outside the home network.
+    """
+    if not codes:
+        return None
+    cleaned = list(dict.fromkeys(c.strip().upper() for c in codes if c and c.strip()))
+    if not cleaned:
+        return None
+    known = await geoip.known_countries()
+    if known is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Country allowlists need the GeoIP database, which is not installed",
+        )
+    unknown = [c for c in cleaned if c not in known]
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown country code: {', '.join(unknown)} (use ISO codes such as GB, US)",
+        )
+    return cleaned
 
 
 async def _hash_pin_or_none(value: Any) -> str | None:
@@ -349,7 +391,8 @@ def _clean_entity_meta(
     require_proximity is read from the top level of each entry, never from
     `options` — it is stored in its own column because the command path enforces
     it, and letting it arrive inside the presentation blob would blur exactly
-    the line that column exists to keep.
+    the line that column exists to keep. require_local_network is handled the
+    same way for the same reason.
     """
     if not meta:
         return None
@@ -360,11 +403,13 @@ def _clean_entity_meta(
         name = _clean_name(m.get("display_name"))
         opts = _clean_options(m.get("options"))
         gated = bool(m.get("require_proximity"))
-        if name or opts or gated:
+        local_only = bool(m.get("require_local_network"))
+        if name or opts or gated or local_only:
             cleaned[eid] = {
                 "display_name": name,
                 "options": opts,
                 "require_proximity": gated,
+                "require_local_network": local_only,
             }
     return cleaned or None
 
@@ -383,7 +428,8 @@ async def set_entity_meta(
     opts = _clean_options(body.options)
 
     updated = await db.set_entity_meta(
-        token_id, body.entity_id, name, opts, body.require_proximity
+        token_id, body.entity_id, name, opts, body.require_proximity,
+        body.require_local_network,
     )
     if not updated:
         raise HTTPException(
@@ -397,6 +443,7 @@ async def set_entity_meta(
         "display_name": name,
         "options": opts or {},
         "require_proximity": body.require_proximity,
+        "require_local_network": body.require_local_network,
     }
 
 
@@ -662,6 +709,56 @@ async def delete_access_code(
     return {"ok": True}
 
 
+@router.patch("/tokens/{token_id}/device-binding")
+async def update_device_binding(
+    token_id: str,
+    body: TokenDeviceBindingRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Turn single-device binding on or off for an existing link.
+
+    Both directions clear any claim, and both hang up the link's open streams.
+    Turning it on for a link a guest is already using sends their tab back to
+    the page, which now asks them to claim it — they are the likeliest first
+    device, and the claim is theirs for one tap. Turning it off is the same
+    push the other way: their page reloads without the lock.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await db.set_device_binding(token_id, body.enabled)
+    await ha_client.broadcast_device_unbound(token_id)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
+@router.post("/tokens/{token_id}/unbind")
+async def unbind_device(token_id: str, _: str = Depends(require_admin)) -> dict:
+    """Release a device-bound link's claim so the next device to claim it gets it.
+
+    The recovery path for a guest who changed phones, cleared their cookies, or
+    claimed the link inside a chat app's built-in browser. Binding stays on; only
+    the claim goes. POST, like revoke and rotate — it changes state.
+
+    The device that held the link is hung up at once rather than on its next
+    request, and it can claim again like any other device — Unbind is "let the
+    right phone in", not "ban this one". If the wrong person has the link,
+    Rotate Link is the tool: it releases the claim and retires the URL together.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if not row["device_binding"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This token is not locked to a device",
+        )
+    await db.clear_device_binding(token_id)
+    await ha_client.broadcast_device_unbound(token_id)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
 @router.post("/tokens/{token_id}/revoke")
 async def revoke_token(token_id: str, _: str = Depends(require_admin)) -> dict:
     row = await db.get_token_by_id(token_id)
@@ -728,9 +825,10 @@ async def rotate_token_slug(token_id: str, _: str = Depends(require_admin)) -> d
     the PIN, and the access log, which is keyed on token id. Two things do not:
     a guest holding a PIN session for the old link has to enter the PIN again,
     because that cookie is scoped Path=/g/<old-slug> and the browser will never
-    send it to the new one; and the token's PIN-free access links are deleted,
-    since each one embeds the old slug. That is the intended outcome — rotation
-    exists to hand the same access to a different person.
+    send it to the new one; the token's PIN-free access links are deleted,
+    since each one embeds the old slug; and a device claim is released, for the
+    same cookie-path reason. That is the intended outcome — rotation exists to
+    hand the same access to a different person.
     """
     row = await db.get_token_by_id(token_id)
     if not row:

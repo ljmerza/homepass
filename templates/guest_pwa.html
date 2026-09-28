@@ -359,6 +359,7 @@ async function init() {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (!r.ok) throw new Error('Failed to load');
     const data = await r.json();
     states = data.states;
@@ -469,6 +470,7 @@ function connectPendingSSE() {
   // An admin edited the timing: the countdown may be pointing at the wrong
   // moment, so let the server decide again.
   pendingEventSource.addEventListener('schedule_changed', activatePending);
+  pendingEventSource.addEventListener('device_unbound', reloadForDevice);
   pendingEventSource.addEventListener('token_expired', e => {
     pendingEventSource.close();
     pendingEventSource = null;
@@ -521,6 +523,8 @@ function connectSSE() {
   eventSource.addEventListener('window_closed', reloadForSchedule);
   eventSource.addEventListener('schedule_changed', reloadForSchedule);
 
+  eventSource.addEventListener('device_unbound', reloadForDevice);
+
   eventSource.onerror = () => {
     badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-primary/10 text-primary';
     dot.className = 'w-1.5 h-1.5 rounded-full bg-current';
@@ -536,6 +540,7 @@ async function refetchState() {
     const r = await fetch(`${BASE}/g/${SLUG}/state`);
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (!r.ok) return;
     const data = await r.json();
     states = data.states;
@@ -549,6 +554,25 @@ async function refetchState() {
 function showPinEntry() {
   if (eventSource) { eventSource.close(); eventSource = null; }
   location.reload();
+}
+
+// This device no longer holds a device-bound link: the admin reset the lock,
+// turned it on or off, or the cookie is gone. Same move as the PIN case —
+// reload, and the server serves whichever of the claim screen, the refusal
+// page or the live page now applies. The page has no copy of either screen.
+function reloadForDevice() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  if (pendingEventSource) { pendingEventSource.close(); pendingEventSource = null; }
+  location.reload();
+}
+
+// A 403 from the device gate carries {detail: {device: true}}; every other 403
+// (the IP allowlist, a proximity refusal) does not. Read from a clone so a
+// caller that goes on to read the body itself still can.
+async function isDeviceRefusal(r) {
+  if (r.status !== 403) return false;
+  const err = await r.clone().json().catch(() => ({}));
+  return Boolean(err.detail && err.detail.device);
 }
 
 function expiredReason(e) {
@@ -1589,6 +1613,9 @@ function requestLocationFix() {
 async function sendCmd(entityId, domain, service, extraData = {}) {
   const body = { entity_id: entityId, service: `${domain}.${service}`, data: extraData };
   const gated = requiresLocation(entityId);
+  // Home-network-only controls explain their refusal the same way, so a guest
+  // off the Wi-Fi is told why rather than seeing a bare "Command failed".
+  const localOnly = Boolean(entityMeta[entityId]?.require_local_network);
   if (gated) {
     const fix = await requestLocationFix();
     if (!fix) return;  // requestLocationFix has already said why
@@ -1602,6 +1629,7 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
     });
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
     if (r.status === 403 || r.status === 503) {
       // Outside the link's access — a weekly window shut, or the schedule
       // cannot be checked. The page reloads into the countdown rather than
@@ -1612,7 +1640,7 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
         return;
       }
     }
-    if (gated && !r.ok) {
+    if ((gated || localOnly) && !r.ok) {
       // A gated control's refusal carries a reason worth repeating — "you need
       // to be at the property", "your location is out of date". Every other
       // path keeps the generic message so no endpoint's wording leaks into the

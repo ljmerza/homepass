@@ -57,7 +57,8 @@ async def test_duplicate_carries_remember_pin(client, admin_session, mock_ha_cli
     allEntities = [{ entity_id: 'light.a', friendly_name: 'A', domain: 'light', state: 'on' }];
     replies.push({ ok: true, body: {
       id: 't1', label: 'Stay', entity_ids: ['light.a'], ip_allowlist: null,
-      expires_at: 0, remember_pin: false,
+      created_at: 1700000000, starts_at: null, expires_at: 1700086400,
+      max_uses: null, access_windows: null, remember_pin: false,
     } });
     await duplicateToken('t1');
     console.log(JSON.stringify({ checked: document.getElementById('f-remember-pin').checked }));

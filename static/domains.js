@@ -48,3 +48,13 @@ const DOMAIN_COLORS = {
   sensor: { bg: 'bg-cyan-500/10', text: 'text-cyan-600', icon: 'bg-cyan-600' },
   binary_sensor: { bg: 'bg-lime-500/10', text: 'text-lime-600', icon: 'bg-lime-600' },
 };
+
+// The name a domain is shown under, in the page's language (tr() is in
+// util.js). DOMAIN_LABELS itself stays English on purpose: the admin picker
+// also groups by it — input_boolean joins switch because both say "Switches" —
+// and that grouping must not change with the language.
+function domainLabel(domain) {
+  const key = `domain.${domain}`;
+  if (hasTr(key)) return tr(key);
+  return DOMAIN_LABELS[domain] || (domain.charAt(0).toUpperCase() + domain.slice(1));
+}

@@ -20,3 +20,6 @@ configuration:
   guest_url:
     name: Guest URL
     description: "External base URL for guest links (e.g., https://guest.myhouse.com). Leave empty for local network."
+  timezone:
+    name: Time Zone
+    description: "IANA time zone for weekly access windows (e.g., Europe/Madrid). Leave empty to use Home Assistant's configured time zone."

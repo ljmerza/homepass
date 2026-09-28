@@ -47,6 +47,7 @@ installs, just a link.
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
 - **IP allowlisting** — optionally restrict tokens to specific CIDRs
 - **Country allowlisting** — optionally restrict a link to visitors from chosen countries, using an offline GeoIP database
+- **Public REST API** — optional, key-authenticated `/api/v1` for automations and Node-RED, with Swagger docs (off by default)
 
 ## Installation
 
@@ -123,6 +124,8 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
 | **Time Zone** | IANA zone for weekly access windows (e.g. `Europe/Madrid`); empty uses Home Assistant's | — |
 | **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g. `192.168.1.0/24`). Empty turns home-network-only controls off | — |
+| **Enable API** | Serve the REST API under `/api/v1` | `false` |
+| **API Token** | `X-API-Key` value for the API (min 32 chars, required when enabled) | — |
 
 ### Docker Environment Variables
 
@@ -143,6 +146,8 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `TIMEZONE` | IANA zone for weekly access windows; unset uses Home Assistant's | No | — |
 | `LOCAL_NETWORK_CIDRS` | Comma-separated CIDRs that count as the home network | No | — |
 | `GEOIP_DB_PATH` | IP-to-country CSV for country allowlists (see below) | No | `/app/geoip/dbip-country-lite.csv.gz` |
+| `API_ENABLED` | Serve the REST API under `/api/v1` | No | `false` |
+| `API_TOKEN` | `X-API-Key` value for the API (min 32 chars) | When `API_ENABLED` | — |
 
 ## Home Assistant Activity Events
 
@@ -434,6 +439,34 @@ in the background at startup when a live link has a country allowlist, or on
 first use otherwise — a second or two of parsing, longer on a Raspberry Pi, and
 roughly 10 MB of memory. Installs with no country-restricted link never load it.
 
+## Public API
+
+Off by default. Set **Enable API** and an **API Token** of at least 32
+characters (`API_ENABLED=true` / `API_TOKEN=...` for Docker), then send the
+token as `X-API-Key`:
+
+```bash
+curl -H "X-API-Key: $HOMEPASS_API_TOKEN" http://<your-ha-ip>:5880/api/v1/tokens
+
+curl -X POST -H "X-API-Key: $HOMEPASS_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"label": "Cleaner", "entity_ids": ["lock.front_door"], "expires_at": 1798761600}' \
+  http://<your-ha-ip>:5880/api/v1/tokens
+```
+
+Endpoints under `/api/v1/tokens`: list, create, get, `PATCH` (label, entities,
+expiry, PIN), `DELETE`, and `POST .../{id}/revoke`, `renew`, `activate`,
+`rotate-slug` and `duplicate`. Each one runs the dashboard's own logic, so
+validation and side effects (open guest tabs being told a link was revoked, for
+instance) are identical. Expiries take `expires_at` (Unix seconds) or
+`expires_in_seconds`. A PIN can be set but is never returned.
+
+The key is the only credential — a dashboard session does not unlock the API.
+Swagger UI is at `/api/docs` (linked from the dashboard header) and the schema
+at `/api/openapi.json`; both need a dashboard login, and the schema also accepts
+the key. Swagger UI is bundled into the image at build time, pinned and
+checksummed, so the docs page runs under the same Content Security Policy as
+the rest of the app and nothing is loaded from a CDN.
+
 ## Limits
 
 Hardcoded, not configurable.
@@ -447,6 +480,7 @@ Hardcoded, not configurable.
 | PIN attempts | 5/minute and 20/hour per IP; 15/minute and 100/hour per link |
 | Link-without-PIN checks | 10/minute and 60/hour per IP; 30/minute and 300/hour per link |
 | Admin login attempts | 5/minute per IP |
+| Public API requests | 120/minute per IP |
 | Access log retention | 90 days, via `ACCESS_LOG_RETENTION_DAYS` |
 
 The command allowance is deliberately loose on the short window: the colour wheel

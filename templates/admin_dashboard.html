@@ -97,6 +97,11 @@
             <span aria-hidden="true" class="material-symbols-outlined text-[16px]">dark_mode</span>
           </button>
         </div>
+        {% if api_enabled %}
+        <a href="{{ base_path }}/api/docs" target="_blank" rel="noopener" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+          API Docs
+        </a>
+        {% endif %}
         {% if not is_ingress %}
         <button data-action="do-logout" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
           Sign out

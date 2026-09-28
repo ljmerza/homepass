@@ -36,6 +36,8 @@ Set these options in the add-on Configuration tab:
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
 | **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
 | **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
+| **Enable API** | Serve the REST API under `/api/v1` for automations and Node-RED. Off by default. See [Public API](#public-api). |
+| **API Token** | Key for the REST API, sent as the `X-API-Key` header. Required when the API is enabled, min 32 characters. |
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
@@ -159,6 +161,29 @@ Each token's card offers:
 **Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
 
 **Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
+
+## Public API
+
+An optional REST API lets Home Assistant automations, Node-RED or any HTTP client manage tokens without the dashboard. It is off until you turn on **Enable API** and set an **API Token** of at least 32 characters (`openssl rand -hex 32` makes a good one), then restart the add-on.
+
+Send the token in the `X-API-Key` header on every request. A dashboard login does not unlock the API; only the key does.
+
+| Method | Path | Does |
+|---|---|---|
+| `GET` | `/api/v1/tokens` | List tokens |
+| `POST` | `/api/v1/tokens` | Create a token |
+| `GET` | `/api/v1/tokens/{id}` | One token, with entities and per-entity options |
+| `PATCH` | `/api/v1/tokens/{id}` | Change label, entities, expiry or PIN |
+| `DELETE` | `/api/v1/tokens/{id}` | Delete a token and its history |
+| `POST` | `/api/v1/tokens/{id}/revoke` | Revoke |
+| `POST` | `/api/v1/tokens/{id}/renew` | New expiry, and un-revoke |
+| `POST` | `/api/v1/tokens/{id}/activate` | Start a scheduled token now |
+| `POST` | `/api/v1/tokens/{id}/rotate-slug` | New link, old one stops working |
+| `POST` | `/api/v1/tokens/{id}/duplicate` | Copy entities, options and IP allowlist into a new token |
+
+Anything that sets an expiry takes either `expires_at` (Unix seconds — handy for a check-out time) or `expires_in_seconds`, not both. Creating a token runs the same checks as the dashboard. Responses never include a PIN, only `has_pin`.
+
+With the API enabled, the dashboard header gets an **API Docs** link to an interactive Swagger page at `/api/docs`. The page and the schema at `/api/openapi.json` need a dashboard login (the schema also accepts the API key). The API is limited to 120 requests a minute per client IP.
 
 ## Notifications
 

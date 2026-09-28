@@ -31,6 +31,25 @@ RUN mkdir -p geoip \
     && test -s geoip/dbip-country-lite.csv.gz
 RUN tailwindcss -i static/input.css -o static/dist.css --minify
 
+# Swagger UI for /api/docs, self-hosted so the docs page runs under the app's
+# normal CSP with no CDN allowance. Pinned by tag and by content hash: the tag
+# says which release, the hashes make sure a moved tag or a tampered download
+# fails the build instead of shipping. Fetched after Tailwind on purpose — the
+# Tailwind content glob covers static/**/*.js, and a 1.5 MB bundle scanned for
+# class names would only bloat dist.css. Bumping the version means updating
+# all three hashes (sha256sum of each file at the new tag).
+ARG SWAGGER_UI_VERSION=v5.32.15
+RUN mkdir -p static/vendor/swagger-ui && cd static/vendor/swagger-ui \
+    && base="https://raw.githubusercontent.com/swagger-api/swagger-ui/${SWAGGER_UI_VERSION}" \
+    && curl -fsSL -o swagger-ui-bundle.js "${base}/dist/swagger-ui-bundle.js" \
+    && curl -fsSL -o swagger-ui.css "${base}/dist/swagger-ui.css" \
+    && curl -fsSL -o LICENSE "${base}/LICENSE" \
+    && printf '%s  %s\n' \
+       a7e344f2770b2f07527ce828e0951626983b8f2dcdb7a826689c0232023f995b swagger-ui-bundle.js \
+       d7f39f764aa18c7b47dd05b9af5613e373e4ac0f3557c2693d52d0abc2464d76 swagger-ui.css \
+       cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30 LICENSE \
+       | sha256sum -c -
+
 ARG GIT_SHA=dev
 # Build timestamp too: local builds all get GIT_SHA=dev, and a byte-identical
 # sw.js means browsers never install the new worker.

@@ -4,6 +4,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The public API key is the whole credential for every admin action the API
+# exposes, and it is compared as a string, not hashed — so it has to be long
+# enough that guessing it is not a plan. 32 characters is the floor for a key a
+# person typed; `openssl rand -hex 32` gives 64.
+API_TOKEN_MIN_LENGTH = 32
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -36,6 +42,11 @@ class Settings(BaseSettings):
     # The image bakes one in at build time (see the Dockerfile); a missing file
     # is not an error, it only means no link can be given a country allowlist.
     geoip_db_path: str = "/app/geoip/dbip-country-lite.csv.gz"
+    # Off unless asked for. The API is a second way in to everything the admin
+    # dashboard can do, so it does not exist — no routes, no docs — until an
+    # admin turns it on and sets a key.
+    api_enabled: bool = False
+    api_token: str = ""
 
     @field_validator("timezone")
     @classmethod
@@ -71,6 +82,17 @@ class Settings(BaseSettings):
                 ipaddress.ip_network(cidr, strict=False)
             except ValueError:
                 raise ValueError(f"local_network_cidrs: invalid CIDR {cidr!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _require_api_token_when_enabled(self):
+        # Refuse to start rather than serve an API with a short or empty key:
+        # an enabled API with no key would compare "" against "" and let
+        # everyone in.
+        if self.api_enabled and len(self.api_token) < API_TOKEN_MIN_LENGTH:
+            raise ValueError(
+                f"api_token must be at least {API_TOKEN_MIN_LENGTH} characters when api_enabled is true"
+            )
         return self
 
 

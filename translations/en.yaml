@@ -26,3 +26,9 @@ configuration:
   local_network_cidrs:
     name: Home Network Ranges
     description: "Comma-separated CIDRs that count as your home network (e.g., 192.168.1.0/24). Controls marked 'Only from the home network' accept commands only from these. Leave empty to turn this off."
+  api_enabled:
+    name: Enable API
+    description: "Serve the REST API under /api/v1 for Home Assistant automations, Node-RED and other integrations. Off by default."
+  api_token:
+    name: API Token
+    description: "Key sent in the X-API-Key header. Required when the API is enabled, min 32 characters. Generate one with 'openssl rand -hex 32'."

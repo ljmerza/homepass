@@ -263,6 +263,18 @@ async def create_token(
     request: Request,
     _: str = Depends(require_admin),
 ) -> dict:
+    return await _create_token(body)
+
+
+async def _create_token(body: TokenCreateRequest, expires_at: int | None = None) -> dict:
+    """Validate a create request and insert the token. Shared with the public API.
+
+    `expires_at` is an absolute expiry the caller has already resolved and
+    checked, and it wins over the body's own expiry fields. Only the public API
+    passes one; the dashboard's body is resolved here by _resolve_expiry, which
+    takes exactly one of expires_in_seconds (anchored to the scheduled start) or
+    an absolute expires_at.
+    """
     # Validate IP CIDR list if provided
     if body.ip_allowlist:
         for cidr in body.ip_allowlist:
@@ -278,7 +290,8 @@ async def create_token(
 
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
-    expires_at = _resolve_expiry(body.expires_in_seconds, body.expires_at, starts_at)
+    if expires_at is None:
+        expires_at = _resolve_expiry(body.expires_in_seconds, body.expires_at, starts_at)
 
     # Ensure slug uniqueness
     existing = await db.get_token_by_slug(slug)
@@ -497,16 +510,7 @@ async def update_token_expiry(
     new_expires = _resolve_expiry(
         body.expires_in_seconds, body.expires_at, _normalise_starts_at(row["starts_at"])
     )
-    await db.update_token_expiry(token_id, new_expires)
-    # Un-revoke if the token was revoked (admin is explicitly renewing it)
-    if row["revoked"]:
-        await db.unrevoke_token(token_id)
-    # Same reasoning for a use-limited link that has spent every use: Renew is
-    # the dashboard's action for a dead card, and a spent link is one. Only a
-    # spent one — extending a link with uses left must not hand back the ones
-    # already made.
-    if row["max_uses"] is not None and row["use_count"] >= row["max_uses"]:
-        await db.reset_token_uses(token_id)
+    await _renew_token(row, new_expires)
     row = await db.get_token_by_id(token_id)
     return _row_to_response(row)
 
@@ -565,6 +569,21 @@ async def get_timezone(_: str = Depends(require_admin)) -> dict:
     """
     name, source = await schedule.house_zone_name()
     return {"timezone": name, "source": source}
+
+
+async def _renew_token(row: Any, expires_at: int) -> None:
+    """Set a new expiry, clear a revocation and give a spent use limit its uses
+    back. Shared with the public API."""
+    await db.update_token_expiry(row["id"], expires_at)
+    # Un-revoke if the token was revoked (admin is explicitly renewing it)
+    if row["revoked"]:
+        await db.unrevoke_token(row["id"])
+    # Same reasoning for a use-limited link that has spent every use: Renew is
+    # the dashboard's action for a dead card, and a spent link is one. Only a
+    # spent one — extending a link with uses left must not hand back the ones
+    # already made.
+    if row["max_uses"] is not None and row["use_count"] >= row["max_uses"]:
+        await db.reset_token_uses(row["id"])
 
 
 @router.patch("/tokens/{token_id}/pin")

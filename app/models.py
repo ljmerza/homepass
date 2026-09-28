@@ -354,3 +354,94 @@ class TokenResponse(BaseModel):
     ip_allowlist: list[str] | None
     entity_count: int
     entity_ids: list[str] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Public API (/api/v1)
+# ---------------------------------------------------------------------------
+# The API reuses the dashboard's create path, so its request bodies are the
+# dashboard's with one addition: an automation usually knows when a stay ends
+# (a check-out time off a calendar) rather than how long it lasts, so every
+# body that sets an expiry takes either an absolute `expires_at` or the
+# dashboard's `expires_in_seconds`.
+#
+# "Exactly one of the two" is enforced in the router, not with a model
+# validator. A model-level ValueError becomes a 422 whose `input` is the whole
+# body — and the body can carry a PIN, which must not come back in a response.
+
+class ApiTokenCreateRequest(TokenCreateRequest):
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    # Epoch seconds. NEVER_EXPIRES_SECONDS is accepted and means "never", same
+    # as it does for expires_in_seconds. Checked against the clock and the start
+    # time in the router.
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
+
+
+class ApiTokenUpdateRequest(BaseModel):
+    """Change any subset of a token. Omitted fields are left alone.
+
+    `pin` distinguishes "absent" from "null": leaving it out keeps the PIN,
+    sending null or "" clears it. Unconstrained for the same reason as
+    TokenCreateRequest.pin.
+
+    Changing the expiry here does not un-revoke a revoked token — that is what
+    /renew is for, the same split the dashboard has between editing a token and
+    renewing one.
+    """
+    label: str | None = Field(default=None, min_length=1, max_length=200)
+    entity_ids: list[str] | None = Field(default=None, min_length=1)
+    entity_meta: dict[str, dict[str, Any]] | None = None
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
+    pin: str | None = None
+
+
+class ApiTokenRenewRequest(BaseModel):
+    """New expiry for a token, clearing a revocation. Same effect as the
+    dashboard's Renew."""
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
+
+
+class ApiTokenDuplicateRequest(BaseModel):
+    """Overrides for a copy of an existing token. Every field is optional.
+
+    What is copied and what is not follows the dashboard's Duplicate: the
+    entities and the IP allowlist carry over; the slug, the PIN and the
+    scheduled start do not, because they belong to one guest's stay. With no
+    expiry given, a never-expiring source gives a never-expiring copy and
+    anything else gets 24 hours.
+    """
+    label: str | None = Field(default=None, min_length=1, max_length=200)
+    slug: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
+    starts_at: int | None = Field(default=None, gt=0, lt=NEVER_EXPIRES_SECONDS)
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
+    pin: str | None = None
+
+
+class ApiEntityMeta(BaseModel):
+    display_name: str | None = None
+    options: dict[str, Any] = Field(default_factory=dict)
+    require_proximity: bool = False
+
+
+class ApiTokenResponse(BaseModel):
+    """A token as the API returns it. Same fields as the dashboard sees.
+
+    `entity_ids` and `entity_meta` are null in list responses, which carry only
+    `entity_count`; fetch one token to get them.
+    """
+    id: str
+    slug: str
+    label: str
+    created_at: int
+    starts_at: int | None
+    expires_at: int
+    revoked: bool
+    last_accessed: int | None
+    ip_allowlist: list[str] | None
+    entity_count: int
+    entity_ids: list[str] | None = None
+    entity_meta: dict[str, ApiEntityMeta] | None = None
+    has_pin: bool

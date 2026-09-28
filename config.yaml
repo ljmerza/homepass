@@ -27,6 +27,8 @@ options:
   guest_url: ""
   timezone: ""
   local_network_cidrs: ""
+  api_enabled: false
+  api_token: ""
 schema:
   admin_username: "str?"
   admin_password: "password?"
@@ -37,4 +39,6 @@ schema:
   guest_url: "str?"
   timezone: "str?"
   local_network_cidrs: "str?"
+  api_enabled: bool
+  api_token: "password?"
 image: "ghcr.io/ljmerza/homepass"

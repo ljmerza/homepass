@@ -42,6 +42,7 @@ installs, just a link.
 - **Real-time updates** — SSE-powered live state changes with automatic reconnect
 - **Installable PWA** — guests can add it to their home screen for an app-like experience
 - **Dark mode** — system-aware with manual override
+- **State-coloured cards** — guest cards in the style of Home Assistant's Mushroom cards: the round icon shape takes its colour from what the entity is doing (a lit lamp amber, or its own bulb colour; a locked door green, an unlocked one red), and goes neutral when idle
 - **Languages** — guest pages in all 24 official EU languages, picked from the guest's browser; the admin dashboard in English or Spanish, auto-detected or pinned per browser
 - **Admin dashboard** — create, revoke, extend, and monitor tokens
 - **Live settings** — change the app name, contact message, Guest URL, colours and log retention from the dashboard, no restart

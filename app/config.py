@@ -1,4 +1,6 @@
-from pydantic import Field, model_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +19,25 @@ class Settings(BaseSettings):
     brand_primary: str = "#D9523C"
     supervisor_token: str = ""
     guest_url: str = ""
+    # IANA zone name ("Europe/Madrid") that weekly access windows are evaluated
+    # in. Blank — the default — uses Home Assistant's own configured time zone,
+    # which is what the house's clocks already show; this only exists for the
+    # rare install whose HA zone is not the one its guests live by. See
+    # app/schedule.py.
+    timezone: str = ""
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        # Rejected at startup rather than at the first guest request: a typo
+        # here would otherwise surface as every windowed link refusing access.
+        value = value.strip()
+        if value:
+            try:
+                ZoneInfo(value)
+            except (ZoneInfoNotFoundError, ValueError):
+                raise ValueError(f"timezone {value!r} is not a known IANA time zone")
+        return value
 
     @model_validator(mode="after")
     def _require_credentials_in_standalone(self):

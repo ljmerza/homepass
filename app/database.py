@@ -98,11 +98,14 @@ async def create_token(
     entity_meta: dict[str, dict[str, Any]] | None = None,
     pin_hash: str | None = None,
     starts_at: int | None = None,
+    access_windows: list[dict[str, Any]] | None = None,
+    max_uses: int | None = None,
 ) -> dict[str, Any]:
     db = await get_db()
     token_id = str(uuid.uuid4())
     now = int(time.time())
     ip_json = json.dumps(ip_allowlist) if ip_allowlist else None
+    windows_json = json.dumps(access_windows) if access_windows else None
 
     # Deduplicate entity IDs
     entity_ids = list(dict.fromkeys(entity_ids))
@@ -111,9 +114,11 @@ async def create_token(
         await db.execute("BEGIN IMMEDIATE")
         await db.execute(
             """INSERT INTO tokens
-               (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash),
+               (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash,
+                access_windows, max_uses)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash,
+             windows_json, max_uses),
         )
         if entity_ids:
             meta = entity_meta or {}
@@ -327,6 +332,69 @@ async def activate_token_now(token_id: str) -> None:
     """
     db = await get_db()
     await db.execute("UPDATE tokens SET starts_at = NULL WHERE id = ?", (token_id,))
+    await db.commit()
+
+
+async def update_token_schedule(
+    token_id: str,
+    starts_at: int | None,
+    expires_at: int,
+    access_windows: list[dict[str, Any]] | None,
+    max_uses: int | None,
+    reset_uses: bool = False,
+) -> None:
+    """Replace every timing field on a token in one write.
+
+    One UPDATE rather than one per field so a guest request landing mid-edit
+    sees the old schedule or the new one, never half of each.
+    """
+    db = await get_db()
+    windows_json = json.dumps(access_windows) if access_windows else None
+    await db.execute(
+        "UPDATE tokens SET starts_at = ?, expires_at = ?, access_windows = ?, max_uses = ?, "
+        "use_count = CASE WHEN ? THEN 0 ELSE use_count END WHERE id = ?",
+        (starts_at, expires_at, windows_json, max_uses, int(reset_uses), token_id),
+    )
+    await db.commit()
+
+
+async def consume_token_use(token_id: str) -> bool:
+    """Claim one use of a use-limited token. False if none is left.
+
+    The check and the increment are the same statement, so two commands racing
+    for a single-use link's last use cannot both win it: SQLite applies the
+    UPDATEs one after the other and the loser's WHERE no longer matches. A
+    read-then-write here would let both through.
+
+    A token with no limit has nothing to claim and is never passed in.
+    """
+    db = await get_db()
+    cur = await db.execute(
+        "UPDATE tokens SET use_count = use_count + 1 "
+        "WHERE id = ? AND max_uses IS NOT NULL AND use_count < max_uses",
+        (token_id,),
+    )
+    await db.commit()
+    return cur.rowcount > 0
+
+
+async def refund_token_use(token_id: str) -> None:
+    """Give back a use claimed for a command Home Assistant then failed.
+
+    A single-use link that spent its only use on a 502 would leave the guest
+    locked out of the one thing they were sent the link to do.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET use_count = use_count - 1 WHERE id = ? AND use_count > 0",
+        (token_id,),
+    )
+    await db.commit()
+
+
+async def reset_token_uses(token_id: str) -> None:
+    db = await get_db()
+    await db.execute("UPDATE tokens SET use_count = 0 WHERE id = ?", (token_id,))
     await db.commit()
 
 

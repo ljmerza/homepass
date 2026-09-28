@@ -178,35 +178,9 @@
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
         <p class="text-xs text-muted mt-1">Custom slugs are guessable. Use random slugs for external access.</p>
       </div>
-      <div>
-        <label for="f-expiry" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Expiry</label>
-        <select id="f-expiry" data-action="toggle-custom-expiry" data-prefix="f"
-          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
-          <option value="3600">1 hour</option>
-          <option value="43200">12 hours</option>
-          <option value="86400" selected>1 day</option>
-          <option value="259200">3 days</option>
-          <option value="604800">7 days</option>
-          <option value="2592000">30 days</option>
-          <option value="7776000">90 days</option>
-          <option value="31536000">1 year</option>
-          <option value="4102444800">Never expires</option>
-          <option value="custom">Custom...</option>
-        </select>
-        <p id="f-never-warn" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-1">This token grants permanent access until manually revoked.</p>
-        <div id="f-custom-expiry" class="hidden mt-2">
-          <input id="f-custom-datetime" type="datetime-local"
-            class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-          <p id="f-custom-error" class="hidden text-xs text-primary mt-1">Date must be in the future.</p>
-        </div>
-      </div>
-      <div>
-        <label for="f-starts-at" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Valid From <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
-        <input id="f-starts-at" type="datetime-local"
-          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-        <p id="f-starts-at-error" class="hidden text-xs text-primary mt-1">Start date must be in the future.</p>
-        <p class="text-xs text-muted mt-1">Leave blank to start now. The expiry above is counted from this time, so the link can be sent to the guest well before it opens.</p>
-      </div>
+      <!-- Filled by timingFormHtml('f'): the same form the Edit Schedule modal
+           uses, so the two cannot drift apart in what a schedule can be. -->
+      <div id="f-timing"></div>
       <div>
         <label for="f-ip" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">IP Allowlist</label>
         <input id="f-ip" type="text" placeholder="192.168.1.0/24"
@@ -388,6 +362,30 @@
   </div>
 </div>
 
+<!-- Edit Schedule Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="schedule-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+    <div class="flex items-center justify-between mb-3">
+      <h2 id="schedule-modal-title" class="text-lg font-serif">Edit Schedule</h2>
+      <button data-action="close-modal" data-modal="schedule" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <div id="schedule-token-label" class="text-sm text-muted mb-4"></div>
+    <div id="s-timing"></div>
+    <label id="s-reset-uses-wrap" class="hidden mt-3 flex items-center gap-2.5 cursor-pointer">
+      <input id="s-reset-uses" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+      <span class="text-sm">Reset the use count <span id="s-uses-now" class="text-muted"></span></span>
+    </label>
+    <p class="text-xs text-muted mt-3">A guest who already has the link open is moved onto the new schedule straight away.</p>
+    <div id="schedule-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-3 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="schedule" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+      <button data-action="submit-schedule" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Modal -->
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="confirm-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl text-center" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
@@ -508,6 +506,7 @@ function showApp() {
   loadActivity();
   loadEntities();
   loadTemplates();
+  loadTimezone();
   startAutoRefresh();
   requestAnimationFrame(updateThemeToggles);
 }
@@ -581,6 +580,9 @@ function toggleActivity() {
 
 function tokenStatus(t) {
   if (t.revoked) return 'revoked';
+  // A use-limited link with nothing left is as dead as an expired one, and
+  // Renew is what brings it back.
+  if (t.uses_remaining === 0) return 'used';
   const now = Date.now() / 1000;
   // Checked before expiry so a scheduled token reads as scheduled rather than
   // expiring, and after revoked because revoking one settles the question.
@@ -632,7 +634,7 @@ function renderTokens() {
     return;
   }
 
-  const order = { active: 0, expiring: 1, scheduled: 2, expired: 3, revoked: 4 };
+  const order = { active: 0, expiring: 1, scheduled: 2, used: 3, expired: 4, revoked: 5 };
   const sorted = [...tokens].sort((a, b) => order[tokenStatus(a)] - order[tokenStatus(b)]);
 
   grid.innerHTML = sorted.map(t => {
@@ -647,11 +649,12 @@ function renderTokens() {
       active: { label: 'Active', icon: 'circle', dotClass: 'pulse-dot text-ink', bgClass: 'bg-ink/10 text-ink' },
       expiring: { label: 'Expiring', icon: 'schedule', dotClass: 'text-amber-600', bgClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
       scheduled: { label: 'Scheduled', icon: 'event_upcoming', dotClass: 'text-violet-500', bgClass: 'bg-violet-500/10 text-violet-500' },
+      used: { label: 'Used', icon: 'task_alt', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
       expired: { label: 'Expired', icon: 'timer_off', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
       revoked: { label: 'Revoked', icon: 'block', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
     };
     const badge = badges[status];
-    const expiryAction = status === 'expired' || status === 'revoked' ? 'Renew' : 'Extend';
+    const expiryAction = status === 'expired' || status === 'revoked' || status === 'used' ? 'Renew' : 'Extend';
     const expiryIcon = expiryAction === 'Renew' ? 'autorenew' : 'update';
 
     const stripClass = status === 'active' ? 'from-ink to-blue-400'
@@ -720,6 +723,14 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-base">hourglass_top</span>
             <span>Starts ${relativeTime(t.starts_at)}</span>
           </div>` : ''}
+          ${t.max_uses != null ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">confirmation_number</span>
+            <span>${esc(String(t.uses_remaining))} of ${esc(String(t.max_uses))} ${t.max_uses === 1 ? 'use' : 'uses'} left</span>
+          </div>` : ''}
+          ${t.access_windows ? `<div class="col-span-2 flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">date_range</span>
+            <span class="truncate" title="${esc(windowsSummary(t.access_windows))}">${esc(windowsSummary(t.access_windows))}</span>
+          </div>` : ''}
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">history</span>
             <span>${esc(lastAccess)}</span>
@@ -758,7 +769,11 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-sm">block</span> Revoke
           </button>
         </div>
-        <div class="grid grid-cols-2 gap-2 mt-2">
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="open-schedule-modal"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Change when this link works">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit_calendar</span> Schedule
+          </button>
           <button data-id="${esc(t.id)}" data-action="confirm-rotate"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Issue a new link and retire this one">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">autorenew</span> Rotate Link
@@ -1112,6 +1127,337 @@ function confirmDeleteTemplate(templateId, name) {
   });
 }
 
+// ── Token timing form ─────────────────────────────────────────────────
+// One form, rendered into both the create modal (prefix "f") and the Edit
+// Schedule modal (prefix "s"), with three modes:
+//   single_use — a use limit, with an optional last day;
+//   never      — no expiry at all;
+//   period     — a start and an end, and optionally weekly windows inside it.
+// Ends are always sent as an absolute expires_at. A duration would be anchored
+// server-side to the start, which is right for "3 days" and wrong for a date
+// the admin picked on a calendar.
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MAX_USES_CAP = 1000;
+// The zone weekly windows are evaluated in, from /admin/timezone.
+let houseZone = null;
+// Weekly windows being edited, per form prefix: [{weekdays, start, end}]
+const timingWindows = { f: [], s: [] };
+
+const TIMING_INPUT = 'w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+
+function timingModeCard(p, mode, title, hint) {
+  return `<label class="flex items-start gap-2 p-2.5 rounded-xl border border-border-light dark:border-border-dark cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+    <input type="radio" name="${p}-timing-mode" id="${p}-mode-${mode}" value="${mode}" data-action="timing-mode" data-prefix="${p}" class="mt-0.5 accent-primary">
+    <span>
+      <span class="block text-sm font-display font-medium">${title}</span>
+      <span class="block text-xs text-muted">${hint}</span>
+    </span>
+  </label>`;
+}
+
+function timingFormHtml(p) {
+  const quick = [['1 hour', 3600], ['1 day', 86400], ['3 days', 259200], ['7 days', 604800], ['30 days', 2592000]];
+  return `<label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Access</label>
+    <div class="space-y-2">
+      ${timingModeCard(p, 'single_use', 'Single use', 'Stops working once it has been used.')}
+      ${timingModeCard(p, 'never', 'No expiry', 'Works until you revoke it.')}
+      ${timingModeCard(p, 'period', 'Set a period', 'Works between a start and an end.')}
+    </div>
+    <div id="${p}-single-fields" class="hidden space-y-2 mt-3">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="${p}-uses" class="block text-xs text-muted mb-1">Uses</label>
+          <input id="${p}-uses" type="number" min="1" max="${MAX_USES_CAP}" step="1" value="1" class="${TIMING_INPUT}">
+        </div>
+        <div>
+          <label for="${p}-single-end" class="block text-xs text-muted mb-1">Valid until <span class="text-muted/60">(optional)</span></label>
+          <input id="${p}-single-end" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+      </div>
+      <p class="text-xs text-muted">A use is one control the guest presses. Opening the link does not count — nor does a chat app loading it to show a preview. A link with only cameras and sensors on it is never used up.</p>
+    </div>
+    <p id="${p}-never-fields" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-2">This token grants permanent access until manually revoked.</p>
+    <div id="${p}-period-fields" class="hidden space-y-2 mt-3">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="${p}-start" class="block text-xs text-muted mb-1">Starts <span class="text-muted/60">(blank = now)</span></label>
+          <input id="${p}-start" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+        <div>
+          <label for="${p}-end" class="block text-xs text-muted mb-1">Ends</label>
+          <input id="${p}-end" type="datetime-local" class="${TIMING_INPUT}">
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${quick.map(([label, secs]) => `<button type="button" data-action="timing-quick" data-prefix="${p}" data-seconds="${secs}"
+          class="px-2.5 py-1 text-[11px] font-display font-medium rounded-full border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">+${label}</button>`).join('')}
+      </div>
+      <p class="text-xs text-muted">The link can be sent well before it opens; the guest sees a countdown until then.</p>
+      <label class="flex items-center gap-2 text-xs text-muted pt-1 cursor-pointer">
+        <input type="checkbox" id="${p}-advanced" data-action="timing-advanced" data-prefix="${p}" class="accent-primary">
+        Advanced: only on certain days and times
+      </label>
+      <div id="${p}-advanced-fields" class="hidden space-y-2 pl-3 border-l-2 border-border-light dark:border-border-dark">
+        <p class="text-xs text-muted">Inside the period above, the link only works during these weekly times, in the house's time zone (<span id="${p}-tz" class="font-mono"></span>). An end earlier than the start runs past midnight; end at 00:00 to run to midnight.</p>
+        <div id="${p}-windows" class="space-y-2"></div>
+        <button type="button" data-action="window-add" data-prefix="${p}"
+          class="flex items-center gap-1 px-2.5 py-1 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">add</span> Add weekly time
+        </button>
+      </div>
+    </div>
+`;
+}
+
+function renderWindows(p) {
+  const list = timingWindows[p];
+  document.getElementById(`${p}-windows`).innerHTML = list.map((w, i) => `<div class="p-2 rounded-xl border border-border-light dark:border-border-dark space-y-2" data-window-row="${i}">
+      <div class="flex flex-wrap gap-1">
+        ${WEEKDAY_LABELS.map((d, day) => {
+          const on = w.weekdays.includes(day);
+          return `<button type="button" data-action="window-day" data-prefix="${p}" data-index="${i}" data-day="${day}" aria-pressed="${on}"
+            class="px-2 py-1 text-[11px] font-mono rounded-lg border transition-colors ${on ? 'border-primary bg-primary/10 text-primary' : 'border-border-light dark:border-border-dark text-muted'}">${d}</button>`;
+        }).join('')}
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="time" data-window-start value="${esc(w.start)}" aria-label="Start time" class="flex-1 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary">
+        <span class="text-muted text-xs">to</span>
+        <input type="time" data-window-end value="${esc(w.end)}" aria-label="End time" class="flex-1 px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary">
+        <button type="button" data-action="window-remove" data-prefix="${p}" data-index="${i}" aria-label="Remove weekly time"
+          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted">
+          <span aria-hidden="true" class="material-symbols-outlined text-base">delete</span>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+// Pull typed times back into state before a re-render throws the inputs away.
+function syncWindowsFromDom(p) {
+  const rows = document.getElementById(`${p}-windows`).querySelectorAll('[data-window-row]');
+  rows.forEach(row => {
+    const w = timingWindows[p][parseInt(row.dataset.windowRow, 10)];
+    if (!w) return;
+    w.start = row.querySelector('[data-window-start]').value;
+    w.end = row.querySelector('[data-window-end]').value;
+  });
+}
+
+function addWindow(p) {
+  syncWindowsFromDom(p);
+  timingWindows[p].push({ weekdays: [], start: '09:00', end: '17:00' });
+  renderWindows(p);
+}
+function removeWindow(p, i) {
+  syncWindowsFromDom(p);
+  timingWindows[p].splice(i, 1);
+  renderWindows(p);
+}
+function toggleWindowDay(p, i, day) {
+  syncWindowsFromDom(p);
+  const w = timingWindows[p][i];
+  if (!w) return;
+  w.weekdays = w.weekdays.includes(day) ? w.weekdays.filter(d => d !== day) : [...w.weekdays, day].sort();
+  renderWindows(p);
+}
+
+function setTimingMode(p, mode) {
+  document.getElementById(`${p}-mode-${mode}`).checked = true;
+  document.getElementById(`${p}-single-fields`).classList.toggle('hidden', mode !== 'single_use');
+  document.getElementById(`${p}-never-fields`).classList.toggle('hidden', mode !== 'never');
+  document.getElementById(`${p}-period-fields`).classList.toggle('hidden', mode !== 'period');
+}
+
+function setAdvanced(p, on) {
+  document.getElementById(`${p}-advanced`).checked = on;
+  document.getElementById(`${p}-advanced-fields`).classList.toggle('hidden', !on);
+  if (on && !timingWindows[p].length) addWindow(p);
+}
+
+// "+3 days" is measured from the start when there is one, like the server
+// measures a duration — so a stay booked for next week ends three days after
+// check-in, not three days from today.
+function applyQuickEnd(p, seconds) {
+  const startVal = document.getElementById(`${p}-start`).value;
+  const start = startVal ? new Date(startVal).getTime() : NaN;
+  const anchor = !isNaN(start) && start > Date.now() ? start : Date.now();
+  document.getElementById(`${p}-end`).value = toLocalInput((anchor / 1000) + seconds);
+}
+
+function toLocalInput(epochSeconds) {
+  const d = new Date(epochSeconds * 1000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+// The form's starting values for a token: what it is now for an edit, and a
+// copy for the next guest for a duplicate. A copy keeps the shape of the
+// access — the mode, the use limit, the weekly times, and how long it lasts —
+// and drops the dates themselves, which belonged to the last booking the way
+// its slug and PIN did. Pure, so the node harness can test it.
+function timingPresetFromToken(token, nowMs, forDuplicate) {
+  const now = Math.floor(nowMs / 1000);
+  const windows = (token.access_windows || []).map(w => ({
+    weekdays: [...w.weekdays],
+    start: w.start,
+    // A time input cannot show 24:00; 00:00 as an end means the same thing.
+    end: w.end === '24:00' ? '00:00' : w.end,
+  }));
+  const mode = token.max_uses != null ? 'single_use'
+    : windows.length ? 'period'
+    : token.expires_at >= NEVER_EXPIRES ? 'never'
+    : 'period';
+  const never = token.expires_at >= NEVER_EXPIRES;
+  const preset = { mode, uses: token.max_uses || 1, windows, advanced: windows.length > 0, start: '', end: '', singleEnd: '' };
+  if (forDuplicate) {
+    const began = token.starts_at || token.created_at;
+    const length = Math.max(3600, token.expires_at - began);
+    if (!never) {
+      preset.end = toLocalInput(now + length);
+      preset.singleEnd = preset.end;
+    }
+  } else {
+    if (token.starts_at && token.starts_at > now) preset.start = toLocalInput(token.starts_at);
+    if (!never) {
+      preset.end = toLocalInput(token.expires_at);
+      preset.singleEnd = preset.end;
+    }
+  }
+  if (!preset.end) preset.end = toLocalInput(now + 86400);
+  return preset;
+}
+
+function setTimingForm(p, preset = {}) {
+  timingWindows[p] = (preset.windows || []).map(w => ({ ...w, weekdays: [...w.weekdays] }));
+  renderWindows(p);
+  document.getElementById(`${p}-uses`).value = String(preset.uses || 1);
+  document.getElementById(`${p}-single-end`).value = preset.singleEnd || '';
+  document.getElementById(`${p}-start`).value = preset.start || '';
+  document.getElementById(`${p}-end`).value = preset.end || toLocalInput(Date.now() / 1000 + 86400);
+  document.getElementById(`${p}-tz`).textContent = houseZone || 'unknown — windowed links refuse access until Home Assistant reports one';
+  setTimingMode(p, preset.mode || 'period');
+  setAdvanced(p, !!preset.advanced);
+}
+
+function readTimingForm(p) {
+  syncWindowsFromDom(p);
+  const form = {
+    mode: document.querySelector(`input[name="${p}-timing-mode"]:checked`)?.value || 'period',
+    uses: document.getElementById(`${p}-uses`).value,
+    singleEnd: document.getElementById(`${p}-single-end`).value,
+    start: document.getElementById(`${p}-start`).value,
+    end: document.getElementById(`${p}-end`).value,
+    advanced: document.getElementById(`${p}-advanced`).checked,
+    windows: timingWindows[p],
+  };
+  return buildTimingBody(form, Date.now());
+}
+
+// Turn the form's raw values into the API's timing fields, or an error.
+// Pure — no DOM — so the node harness can drive it directly.
+function buildTimingBody(form, nowMs) {
+  const now = Math.floor(nowMs / 1000);
+  const toEpoch = v => Math.floor(new Date(v).getTime() / 1000);
+  if (form.mode === 'never') {
+    return { body: { starts_at: null, expires_at: NEVER_EXPIRES, access_windows: null, max_uses: null } };
+  }
+  if (form.mode === 'single_use') {
+    const uses = Number(form.uses);
+    if (!Number.isInteger(uses) || uses < 1 || uses > MAX_USES_CAP) {
+      return { error: `Uses must be a whole number from 1 to ${MAX_USES_CAP}.` };
+    }
+    let end = NEVER_EXPIRES;
+    if (form.singleEnd) {
+      end = toEpoch(form.singleEnd);
+      if (isNaN(end) || end <= now) return { error: 'The end must be in the future.' };
+    }
+    return { body: { starts_at: null, expires_at: end, access_windows: null, max_uses: uses } };
+  }
+
+  // A start already in the past means "now" — the server folds it the same
+  // way — so an edit of a live token does not trip over its own start time.
+  let start = null;
+  if (form.start) {
+    start = toEpoch(form.start);
+    if (isNaN(start)) return { error: 'Invalid start date.' };
+    if (start <= now) start = null;
+  }
+  if (!form.end) return { error: 'Choose when access ends.' };
+  const end = toEpoch(form.end);
+  if (isNaN(end) || end <= now) return { error: 'The end must be in the future.' };
+  if (start && end <= start) return { error: 'The end must be after the start.' };
+
+  let windows = null;
+  if (form.advanced) {
+    if (!form.windows.length) return { error: 'Add a weekly time, or turn the advanced option off.' };
+    windows = [];
+    for (const w of form.windows) {
+      if (!w.weekdays.length) return { error: 'Pick at least one day for each weekly time.' };
+      if (!w.start || !w.end) return { error: 'Each weekly time needs a start and an end.' };
+      // 00:00 as an end is midnight at the close of the day, which the API
+      // spells 24:00 — and 00:00-00:00 is then a whole day, not an empty one.
+      const endHm = w.end === '00:00' ? '24:00' : w.end;
+      if (w.start === endHm) return { error: 'A weekly time must start and end at different times.' };
+      windows.push({ weekdays: [...w.weekdays].sort(), start: w.start, end: endHm });
+    }
+  }
+  return { body: { starts_at: start, expires_at: end, access_windows: windows, max_uses: null } };
+}
+
+// "Tue, Thu 09:00–13:00 · Fri 22:00–02:00" for a token card.
+function windowsSummary(windows) {
+  return (windows || []).map(w =>
+    `${w.weekdays.map(d => WEEKDAY_LABELS[d]).join(', ')} ${w.start}–${w.end === '24:00' ? '24:00' : w.end}`
+  ).join(' · ');
+}
+
+async function loadTimezone() {
+  try {
+    const r = await fetch(`${BASE}/admin/timezone`);
+    if (r.ok) houseZone = (await r.json()).timezone;
+  } catch {}
+}
+
+// ── Edit Schedule Modal ───────────────────────────────────────────────
+let scheduleTokenId = null;
+
+async function openScheduleModal(tokenId) {
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
+  if (!r.ok) { showToast('Failed to load token', 'error'); return; }
+  const token = await r.json();
+  scheduleTokenId = tokenId;
+  document.getElementById('schedule-token-label').textContent = token.label;
+  document.getElementById('schedule-error').textContent = '';
+  setTimingForm('s', timingPresetFromToken(token, Date.now(), false));
+  const limited = token.max_uses != null;
+  document.getElementById('s-reset-uses-wrap').classList.toggle('hidden', !limited);
+  document.getElementById('s-reset-uses').checked = false;
+  document.getElementById('s-uses-now').textContent = limited ? `(${token.use_count} of ${token.max_uses} used)` : '';
+  openModal('schedule-modal');
+}
+function closeScheduleModal() { closeModal('schedule-modal'); scheduleTokenId = null; }
+
+async function submitSchedule() {
+  if (!scheduleTokenId) return;
+  const errEl = document.getElementById('schedule-error');
+  const timing = readTimingForm('s');
+  if (timing.error) { errEl.textContent = timing.error; return; }
+  const r = await fetch(`${BASE}/admin/tokens/${scheduleTokenId}/schedule`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ ...timing.body, reset_uses: document.getElementById('s-reset-uses').checked }),
+  });
+  if (r.ok) {
+    closeScheduleModal();
+    showToast('Schedule updated', 'success');
+    loadTokens();
+  } else {
+    const err = await r.json().catch(() => ({}));
+    errEl.textContent = typeof err.detail === 'string' ? err.detail : 'Error updating schedule.';
+  }
+}
+
+document.getElementById('f-timing').innerHTML = timingFormHtml('f');
+document.getElementById('s-timing').innerHTML = timingFormHtml('s');
+
 // ── Create Token Modal ────────────────────────────────────────────────
 function openCreateModal(preset = {}) {
   createPicker = { selected: new Set(preset.entityIds || []), filter: 'all', label: '', search: '', meta: {} };
@@ -1120,18 +1466,13 @@ function openCreateModal(preset = {}) {
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
   document.getElementById('f-pin').value = '';
-  document.getElementById('f-expiry').value = preset.expiryValue || '86400';
   document.getElementById('create-error').textContent = '';
-  document.getElementById('f-custom-expiry').classList.add('hidden');
-  document.getElementById('f-never-warn').classList.add('hidden');
-  document.getElementById('f-custom-error').classList.add('hidden');
-  document.getElementById('f-custom-datetime').value = '';
-  // Always blank, including on a duplicate: a start time belongs to one
-  // booking the way the slug and the PIN belong to one guest, and a copy made
-  // for the next stay must not silently inherit the last one's check-in.
-  document.getElementById('f-starts-at').value = '';
-  document.getElementById('f-starts-at-error').classList.add('hidden');
-  toggleCustomExpiry('f');
+  // A duplicate passes the source token's timing through
+  // timingPresetFromToken, which keeps the start blank: a start time belongs
+  // to one booking the way the slug and the PIN belong to one guest, and a
+  // copy made for the next stay must not silently inherit the last one's
+  // check-in.
+  setTimingForm('f', preset.timing || {});
   renderPicker('create-picker', createPicker);
   openModal('create-modal');
 }
@@ -1140,17 +1481,15 @@ function closeCreateModal() { closeModal('create-modal'); }
 async function submitCreate() {
   const label = document.getElementById('f-label').value.trim();
   const slug = document.getElementById('f-slug').value.trim() || null;
-  const expiresIn = getExpirySeconds('f');
   const ipRaw = document.getElementById('f-ip').value.trim();
   const ipList = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
   const errEl = document.getElementById('create-error');
 
   const pin = document.getElementById('f-pin').value.trim() || null;
-  const startsAt = getStartsAt();
+  const timing = readTimingForm('f');
 
   if (!label) { errEl.textContent = 'Label is required.'; return; }
-  if (expiresIn === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
-  if (startsAt === false) { errEl.textContent = 'Invalid start date. Must be in the future.'; return; }
+  if (timing.error) { errEl.textContent = timing.error; return; }
   if (createPicker.selected.size === 0) { errEl.textContent = 'Select at least one entity.'; return; }
   if (pin && !PIN_RE.test(pin)) { errEl.textContent = 'PIN must be 4-8 digits.'; return; }
 
@@ -1158,8 +1497,7 @@ async function submitCreate() {
     label, slug,
     entity_ids: [...createPicker.selected],
     entity_meta: createPicker.meta,
-    expires_in_seconds: expiresIn,
-    starts_at: startsAt,
+    ...timing.body,
     ip_allowlist: ipList,
     pin,
   };
@@ -1193,7 +1531,7 @@ async function duplicateToken(tokenId) {
     label: `${token.label} copy`,
     entityIds: token.entity_ids || [],
     ipAllowlist: token.ip_allowlist || [],
-    expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
+    timing: timingPresetFromToken(token, Date.now(), true),
   });
 }
 
@@ -1360,7 +1698,7 @@ let extendTokenId = null;
 
 function openExtendModal(tokenId, label, status = 'active') {
   extendTokenId = tokenId;
-  const action = status === 'expired' || status === 'revoked' ? 'Renew' : 'Extend';
+  const action = status === 'expired' || status === 'revoked' || status === 'used' ? 'Renew' : 'Extend';
   document.getElementById('extend-modal-title').textContent = `${action} Expiry`;
   document.getElementById('extend-token-label').textContent = `${action}: ${label}`;
   document.getElementById('extend-submit-btn').textContent = action;
@@ -1380,10 +1718,16 @@ async function submitExtend() {
   const errEl = document.getElementById('extend-error');
   if (seconds === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
 
+  // A custom date is a calendar end, so it goes as an absolute expires_at. As
+  // a duration it would be re-anchored to a pending token's start and land
+  // that much later than the date picked.
+  const custom = document.getElementById('extend-duration').value === 'custom';
   const r = await fetch(`${BASE}/admin/tokens/${extendTokenId}/expiry`, {
     method: 'PATCH',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ expires_in_seconds: seconds }),
+    body: JSON.stringify(custom
+      ? { expires_at: Math.floor(Date.now() / 1000) + seconds }
+      : { expires_in_seconds: seconds }),
   });
 
   if (r.ok) {
@@ -1465,12 +1809,13 @@ function closeModal(id) {
   releaseFocus();
 }
 
-['create-modal', 'edit-modal', 'extend-modal', 'confirm-modal', 'qr-modal'].forEach(id => {
+['create-modal', 'edit-modal', 'extend-modal', 'schedule-modal', 'confirm-modal', 'qr-modal'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
     if (e.target === e.currentTarget) {
       if (id === 'create-modal') closeCreateModal();
       else if (id === 'edit-modal') closeEditModal();
       else if (id === 'extend-modal') closeExtendModal();
+      else if (id === 'schedule-modal') closeScheduleModal();
       else if (id === 'confirm-modal') closeConfirmModal();
       else if (id === 'qr-modal') closeQrModal();
     }
@@ -1533,23 +1878,6 @@ function getExpirySeconds(prefix) {
     return seconds;
   }
   return parseInt(select.value);
-}
-
-// The optional "valid from" time, as epoch seconds. null means "start now",
-// which is the blank field and every token before this existed. false is the
-// error case and is distinguished from null on purpose — a date the admin
-// typed and got wrong must not silently become an immediately-live link.
-function getStartsAt() {
-  const errorEl = document.getElementById('f-starts-at-error');
-  errorEl.classList.add('hidden');
-  const raw = document.getElementById('f-starts-at').value;
-  if (!raw) return null;
-  const dt = new Date(raw);
-  if (isNaN(dt.getTime()) || dt.getTime() <= Date.now()) {
-    errorEl.classList.remove('hidden');
-    return false;
-  }
-  return Math.floor(dt.getTime() / 1000);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────
@@ -1640,6 +1968,7 @@ document.addEventListener('keydown', e => {
       'extend-modal': closeExtendModal,
       'edit-modal': closeEditModal,
       'pin-modal': closePinModal,
+      'schedule-modal': closeScheduleModal,
       'create-modal': closeCreateModal,
     };
     for (const [id, closer] of Object.entries(closers)) {
@@ -1708,6 +2037,14 @@ document.addEventListener('click', e => {
     case 'open-extend-modal': openExtendModal(el.dataset.id, el.dataset.label, el.dataset.status); break;
     case 'submit-extend': submitExtend(); break;
 
+    // Schedule modal and the timing form inside it and the create modal
+    case 'open-schedule-modal': openScheduleModal(el.dataset.id); break;
+    case 'submit-schedule': submitSchedule(); break;
+    case 'timing-quick': applyQuickEnd(el.dataset.prefix, parseInt(el.dataset.seconds, 10)); break;
+    case 'window-add': addWindow(el.dataset.prefix); break;
+    case 'window-remove': removeWindow(el.dataset.prefix, parseInt(el.dataset.index, 10)); break;
+    case 'window-day': toggleWindowDay(el.dataset.prefix, parseInt(el.dataset.index, 10), parseInt(el.dataset.day, 10)); break;
+
     // Confirm modal
     case 'confirm-ok': {
       const cb = _confirmCallback;
@@ -1718,7 +2055,7 @@ document.addEventListener('click', e => {
 
     // Close any modal
     case 'close-modal': {
-      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal };
+      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal, schedule: closeScheduleModal };
       const closer = modalMap[el.dataset.modal];
       if (closer) closer();
       break;
@@ -1764,6 +2101,12 @@ document.addEventListener('keydown', e => {
 document.addEventListener('change', e => {
   if (e.target.dataset.action === 'toggle-custom-expiry') {
     toggleCustomExpiry(e.target.dataset.prefix);
+  }
+  if (e.target.dataset.action === 'timing-mode') {
+    setTimingMode(e.target.dataset.prefix, e.target.value);
+  }
+  if (e.target.dataset.action === 'timing-advanced') {
+    setAdvanced(e.target.dataset.prefix, e.target.checked);
   }
 });
 

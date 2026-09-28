@@ -28,6 +28,7 @@ from app import database as db
 from app import guest_pin
 from app import ha_client
 from app import proximity
+from app import schedule
 from app.build import BUILD_VERSION, STATIC_DIR
 from app.config import settings
 from app.context import base_context
@@ -114,14 +115,24 @@ PIN_ATTEMPT_LIMITS_PER_TOKEN = ((60.0, 15), (3600.0, 100))
 _CAMERA_ENTITY_RE = re.compile(r"^camera\.[a-z0-9_]+$")
 
 # L-8: Whitelist of allowed SSE event types
-_ALLOWED_SSE_EVENTS = {"state_change", "token_expired", "token_activated", "reconnected"}
+_ALLOWED_SSE_EVENTS = {
+    "state_change", "token_expired", "token_activated", "schedule_changed",
+    "window_closed", "reconnected",
+}
 
-# The subset a stream opened before a token's start time may forward. Neither
-# member carries device data: one says the link is now live, the other says it
-# is gone. state_change and reconnected are deliberately absent — a pending
-# guest must not receive real Home Assistant state, and filtering here means
-# the frames are never serialised rather than merely ignored by the page.
-_PENDING_SSE_EVENTS = {"token_expired", "token_activated"}
+# The subset a stream opened outside a token's access — before its start time,
+# or between two of its weekly windows — may forward. No member carries device
+# data: one says the link is now live, one that it is gone, one that the admin
+# changed its timing and the page should ask again. state_change and
+# reconnected are deliberately absent — a pending guest must not receive real
+# Home Assistant state, and filtering here means the frames are never
+# serialised rather than merely ignored by the page.
+_PENDING_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed"}
+
+# Events after which a stream hangs up. Each one means the page is about to
+# reload or has nothing left to show, and a stream that stayed open would keep
+# relaying on the terms it was opened under rather than the current ones.
+_TERMINAL_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed"}
 
 # M-27: Simple TTL cache for HA state list
 _states_cache: list[dict] | None = None
@@ -263,22 +274,59 @@ def _is_pending(row) -> bool:
 
     NULL starts_at is the ordinary case and returns False without arithmetic,
     so nothing about an unscheduled token changes.
+
+    This is the start time alone. Whether the link works right now — which a
+    weekly window also decides — is _access(); this only tells the two kinds
+    of "not now" apart for the message.
     """
     starts_at = row["starts_at"]
     return bool(starts_at) and starts_at > int(time.time())
 
 
-def _refuse_pending(row) -> None:
-    """Refuse a request that arrived before the token's start time.
+def _is_used_up(row) -> bool:
+    """True once a use-limited token has spent every use.
 
-    403 rather than 410: the link is valid, it is simply not yet in its window,
+    Treated as dead, beside revoked and expired, rather than as "not now": no
+    amount of waiting brings it back, only an admin's renew does.
+    """
+    max_uses = row["max_uses"]
+    return max_uses is not None and row["use_count"] >= max_uses
+
+
+def _is_dead(row) -> bool:
+    return bool(row["revoked"]) or row["expires_at"] <= int(time.time()) or _is_used_up(row)
+
+
+async def _access(row) -> schedule.Access:
+    """Whether this live token can be used right now, and until when.
+
+    The house's time zone is only looked up for a token that carries weekly
+    windows, so every other token decides this with no upstream call at all.
+    """
+    windows = schedule.windows_from_row(row["access_windows"])
+    tz = await schedule.house_zone() if windows is not None else None
+    return schedule.evaluate(row["starts_at"], row["expires_at"], windows, tz, int(time.time()))
+
+
+def _refuse_pending(row, access: schedule.Access) -> None:
+    """Refuse a request that arrived outside the token's access.
+
+    That is before its start time, or between two of its weekly windows.
+    403 rather than 410: the link is valid, it is simply not in its window,
     and 410 would tell a guest who opened it early that their link is dead.
 
-    starts_at rides along in the body because the caller has already cleared
-    every gate that protects it — the IP allowlist and, where one is set, the
-    PIN — and the page they were served states the same time in its banner. It
-    is what lets a tab whose own clock ran fast resynchronise instead of
-    dropping into a generic error.
+    starts_at and opens_at ride along in the body because the caller has
+    already cleared every gate that protects them — the IP allowlist and,
+    where one is set, the PIN — and the page they were served states the same
+    time in its banner. They are what let a tab whose own clock ran fast
+    resynchronise instead of dropping into a generic error. starts_at is the
+    token's own scheduled start (None once it has passed); opens_at is when it
+    next works, which a weekly window can push later than that, and which is
+    None when nothing opens again before the token expires.
+
+    A windowed token whose house time zone cannot be read is refused with 503
+    instead: the schedule cannot be checked, and a gate that opens when it
+    cannot verify is not a gate — the same call the proximity gate makes.
 
     Deliberately not metered. The proximity refusal budget exists because that
     refusal is an oracle over the home's coordinates and costs an upstream zone
@@ -287,9 +335,21 @@ def _refuse_pending(row) -> None:
     exactly the wrong moment: a tab that retried while waiting would be sitting
     in a 429 at the instant its access opened.
     """
+    if access.zone_unknown:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "Can't check this link's schedule right now",
+                    "starts_at": None, "opens_at": None},
+        )
+    pending_start = _is_pending(row)
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail={"error": "This link is not active yet", "starts_at": row["starts_at"]},
+        detail={
+            "error": "This link is not active yet" if pending_start
+            else "This link is not active right now",
+            "starts_at": row["starts_at"] if pending_start else None,
+            "opens_at": access.opens_at,
+        },
     )
 
 
@@ -306,20 +366,21 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
     a pending token is not an active token, so a route added later is refused
     before its start time unless it opts out. /stream is the one that does —
     it is the channel the activation push travels on, and it forwards nothing
-    but lifecycle events while pending.
+    but lifecycle events while pending. Weekly access windows are the same
+    gate: outside every window a token is pending in exactly the sense a
+    not-yet-started one is, and is refused by every route the same way.
 
     Order matters. The PIN is checked first, so a locked token that is also
     scheduled answers "PIN required" and never "starts Tuesday": the pending
     preview names every entity on the link, and that is not something to hand
-    to someone who has not proved the PIN. Revocation and expiry come before
-    both — a dead token is dead whatever its schedule said.
+    to someone who has not proved the PIN. Revocation, expiry and a spent use
+    limit come before both — a dead token is dead whatever its schedule said.
     """
     row = await db.get_token_by_slug(slug)
     if not row:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
-    now = int(time.time())
-    if row["revoked"] or row["expires_at"] <= now:
+    if _is_dead(row):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
     _enforce_ip_allowlist(row, request)
@@ -327,8 +388,10 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
     if not _pin_gate_ok(row, request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN required")
 
-    if not allow_pending and _is_pending(row):
-        _refuse_pending(row)
+    if not allow_pending:
+        access = await _access(row)
+        if not access.active:
+            _refuse_pending(row, access)
 
     return row
 
@@ -522,13 +585,17 @@ async def guest_service_worker():
 @router.get("/{slug}", response_class=HTMLResponse)
 async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: str = Path(max_length=64)):
     row = await db.get_token_by_slug(slug)
-    expired = False
-    if not row or row["revoked"] or row["expires_at"] <= int(time.time()):
-        expired = True
-
-    if expired:
+    if not row or _is_dead(row):
         ctx = base_context(request)
-        ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        # "used" changes the wording and nothing else. It tells whoever holds
+        # the slug that the link was used, which is no more than "expired"
+        # tells them, and it saves a guest who tapped once from wondering
+        # whether the link was ever valid.
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "reason": "used" if row and not row["revoked"] and _is_used_up(row) else "expired",
+        })
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
 
     try:
@@ -550,7 +617,13 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
     # logged, or reported to HA, the same way an unanswered PIN prompt is not.
     # The guest gets the shape of their page and a countdown, and the real
     # page_load lands when the link activates and the tab reloads into it.
-    pending = _is_pending(row)
+    #
+    # Opening a link is never a "use" of a use-limited one either — see
+    # guest_command. A chat app unfurling the URL into a preview card fetches
+    # exactly this page, and must not be able to spend the guest's one use.
+    access = await _access(row)
+    pending = not access.active
+    has_windows = row["access_windows"] is not None
     if not pending:
         await db.touch_token(row["id"])
         await db.log_access(
@@ -577,7 +650,25 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
             False if pending else bool(await db.get_proximity_entity_ids(row["id"]))
         ),
         "pending": pending,
-        "starts_at": row["starts_at"] if pending else None,
+        # The countdown target: when the link next works. None when nothing
+        # opens again before expiry, or the schedule cannot be checked — the
+        # banner then says so instead of counting down to nothing.
+        "starts_at": access.opens_at if pending else None,
+        # Which "not now" this is, for the banner's wording only: "start"
+        # before the first start time, "window" between weekly windows,
+        # "none" when no window opens again before expiry, "unknown" when
+        # the house's time zone cannot be read.
+        "pending_reason": (
+            None if not pending
+            else "unknown" if access.zone_unknown
+            else "none" if access.opens_at is None
+            else "start" if _is_pending(row)
+            else "window"
+        ),
+        # When the current weekly window ends, so a page left open flips back
+        # to the countdown on time. Only for windowed tokens: an ordinary
+        # token's end is its expiry, which the page already watches.
+        "window_closes_at": access.closes_at if has_windows and not pending else None,
         # The countdown is measured against this rather than the device clock,
         # so a phone whose time is minutes out still unlocks when the server
         # says so instead of reloading early into another refusal.
@@ -611,7 +702,7 @@ async def guest_pin_submit(
     a Referer header, or the reverse proxy's access log.
     """
     row = await db.get_token_by_slug(slug)
-    if not row or row["revoked"] or row["expires_at"] <= int(time.time()):
+    if not row or _is_dead(row):
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
@@ -755,18 +846,26 @@ async def guest_state(request: Request, slug: str = Path(max_length=64)):
 # ---------------------------------------------------------------------------
 
 async def _event_generator(
-    token_id: str, slug: str, request: Request, starts_at: int | None = None
+    token_id: str, slug: str, request: Request, starts_at: int | None = None,
+    closes_at: int | None = None,
 ) -> AsyncIterator[str]:
     """Relay a token's events to one guest tab.
 
-    `starts_at` is set only when the stream was opened before the token's start
-    time. Until that moment passes the generator forwards the lifecycle subset
-    and nothing else, so no device state leaves the server — and it watches the
-    clock itself, emitting token_activated when the boundary arrives. That is
-    what unlocks a tab whose own timer never fired because the device was asleep
-    or offline across it: the push is waiting on the socket when it wakes, and a
-    tab that missed the socket entirely reconnects into a stream that is no
-    longer pending.
+    `starts_at` is set only when the stream was opened outside the token's
+    access — before its start time or between weekly windows — and is the
+    moment it next opens. Until that moment passes the generator forwards the
+    lifecycle subset and nothing else, so no device state leaves the server —
+    and it watches the clock itself, emitting token_activated when the boundary
+    arrives. That is what unlocks a tab whose own timer never fired because the
+    device was asleep or offline across it: the push is waiting on the socket
+    when it wakes, and a tab that missed the socket entirely reconnects into a
+    stream that is no longer pending.
+
+    `closes_at` is the mirror image, set only on a live stream of a windowed
+    token: the moment its current window shuts. The generator emits
+    window_closed there and hangs up, so state stops flowing at the boundary
+    rather than whenever the tab next asks — every other guest route re-checks
+    per request, but this one was checked once, at connect.
     """
     q = await ha_client.subscribe(token_id)
     try:
@@ -784,6 +883,12 @@ async def _event_generator(
                     yield 'event: token_activated\ndata: {"type": "token_activated"}\n\n'
                     break
                 timeout = min(timeout, remaining)
+            elif closes_at is not None:
+                remaining = closes_at - time.time()
+                if remaining <= 0:
+                    yield 'event: window_closed\ndata: {"type": "window_closed"}\n\n'
+                    break
+                timeout = min(timeout, remaining)
 
             try:
                 event = await asyncio.wait_for(q.get(), timeout=timeout)
@@ -792,13 +897,14 @@ async def _event_generator(
                 if event["type"] not in allowed:
                     continue
                 yield f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
-                if event["type"] in ("token_expired", "token_activated"):
+                if event["type"] in _TERMINAL_SSE_EVENTS:
                     break
             except asyncio.TimeoutError:
-                # A pending stream reaching its start time lands here, and the
-                # check at the top of the next pass is what turns it into the
-                # activation push.
-                if starts_at is None or starts_at - time.time() > 0:
+                # A stream reaching its boundary — a pending one its start, a
+                # live one its window's end — lands here, and the check at the
+                # top of the next pass is what turns it into the push.
+                boundary = starts_at if starts_at is not None else closes_at
+                if boundary is None or boundary - time.time() > 0:
                     yield ": keepalive\n\n"
 
     finally:
@@ -811,8 +917,19 @@ async def guest_stream(request: Request, slug: str = Path(max_length=64)):
     # data before the start time — see _event_generator — and it is how an
     # "Activate Now" reaches a tab that is already sitting on the countdown.
     row = await _validate_token(slug, request, allow_pending=True)
+    access = await _access(row)
+    if access.active:
+        opens_at = None
+        closes_at = access.closes_at if row["access_windows"] is not None else None
+    else:
+        # Pending with nothing to count down to — no window opens again before
+        # expiry, or the zone cannot be read — still gets a pending stream, so
+        # it can hear an admin's schedule edit. The sentinel is a boundary
+        # that never arrives, not a special case in the generator.
+        opens_at = access.opens_at or NEVER_EXPIRES_SECONDS
+        closes_at = None
     return StreamingResponse(
-        _event_generator(row["id"], slug, request, row["starts_at"] if _is_pending(row) else None),
+        _event_generator(row["id"], slug, request, opens_at, closes_at),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -872,6 +989,12 @@ async def guest_camera_stream(
 ):
     row = await _validate_camera(slug, entity_id, request)
     token_id = row["id"]
+    # A live view opened inside a weekly window must not outlast it. Like the
+    # SSE stream, this relay is gated once, at open, so it carries its own
+    # deadline rather than relying on a re-check that never comes.
+    deadline = None
+    if row["access_windows"] is not None:
+        deadline = (await _access(row)).closes_at
 
     async with _stream_lock:
         if _active_streams.get(token_id, 0) >= MAX_STREAMS_PER_TOKEN:
@@ -905,6 +1028,8 @@ async def guest_camera_stream(
         try:
             async for chunk in chunks:
                 if await request.is_disconnected():
+                    break
+                if deadline is not None and time.time() >= deadline:
                     break
                 yield chunk
         except Exception:
@@ -989,11 +1114,31 @@ async def guest_command(
     clean_data = {k: v for k, v in body.data.items() if k not in FORBIDDEN_DATA_KEYS}
     service_data = {**clean_data, "entity_id": body.entity_id}
 
+    # A use of a use-limited link is one command Home Assistant accepted —
+    # nothing else. Not opening the page, not /state, not the stream: a chat
+    # app that unfurls the URL into a preview card fetches the page (some run
+    # its JavaScript too), and if that counted, the guest's single use would
+    # be gone before they ever tapped it. No preview fetcher POSTs a command,
+    # so a use is something only a person pressing a control can spend — no
+    # User-Agent list to keep up to date.
+    #
+    # Claimed last, after every authorization and payload check, so a refused
+    # or malformed command costs nothing; claimed before the upstream call,
+    # atomically, so two taps racing for the last use cannot both get it; and
+    # refunded if HA then fails, so a 502 does not spend it either.
+    limited = row["max_uses"] is not None
+    if limited and not await db.consume_token_use(token_id):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
+
     try:
         result = await ha_client.call_service(entity_domain, svc_name, service_data)
     except httpx.HTTPStatusError as exc:
+        if limited:
+            await db.refund_token_use(token_id)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Service call failed")
     except Exception:
+        if limited:
+            await db.refund_token_use(token_id)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Service call failed")
 
     await db.log_access(
@@ -1014,4 +1159,13 @@ async def guest_command(
         ),
     )
 
-    return {"ok": True}
+    if not limited:
+        return {"ok": True}
+
+    fresh = await db.get_token_by_id(token_id)
+    uses_remaining = max(0, fresh["max_uses"] - fresh["use_count"]) if fresh else 0
+    if uses_remaining == 0:
+        # Every other tab on this link is still showing live controls it can no
+        # longer use; tell them, the same way a revoke does.
+        await ha_client.broadcast_token_expired(token_id, reason="used")
+    return {"ok": True, "uses_remaining": uses_remaining}

@@ -1,6 +1,6 @@
 """Pydantic request/response models."""
-from typing import Any
-from pydantic import BaseModel, Field
+from typing import Annotated, Any
+from pydantic import BaseModel, Field, model_validator
 
 NEVER_EXPIRES_SECONDS = 4102444800  # 2099-12-31T00:00:00Z
 
@@ -126,11 +126,60 @@ def validate_light_color(data: dict[str, Any]) -> str | None:
     return None
 
 
+# Weekly access windows. See app/schedule.py for how they are evaluated.
+# Fourteen is two per weekday — room for "mornings and evenings" without the
+# list becoming the unbounded blob the admin API should never store.
+MAX_ACCESS_WINDOWS = 14
+_HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
+# An end may also be 24:00, so a window can run to the end of its day.
+_HHMM_END = r"^(([01]\d|2[0-3]):[0-5]\d|24:00)$"
+
+# Upper bound on max_uses. A use limit is for "open the gate once" or "a
+# handful of times", and a cap keeps a stray extra digit from quietly turning
+# a limited link into an unlimited one.
+MAX_USES_CAP = 1000
+
+
+class AccessWindow(BaseModel):
+    """One weekly window, e.g. Tue/Thu 09:00-13:00, in the house's time zone.
+
+    An end before the start crosses midnight, and the weekdays are the days the
+    window opens on: Fri 22:00-02:00 is Friday night into Saturday. A start
+    equal to the end is rejected rather than guessed at — it could mean an
+    empty window or a 24-hour one, and those are opposite answers; a full day
+    is written 00:00-24:00.
+
+    Weekdays are strict ints (0 is Monday, as in datetime.weekday()) so a
+    bool or a numeric string is refused rather than coerced into a day.
+    """
+    weekdays: list[Annotated[int, Field(strict=True, ge=0, le=6)]] = Field(
+        ..., min_length=1, max_length=7
+    )
+    start: str = Field(..., pattern=_HHMM)
+    end: str = Field(..., pattern=_HHMM_END)
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.start == self.end:
+            raise ValueError("start and end must differ; write a full day as 00:00-24:00")
+        self.weekdays = sorted(set(self.weekdays))
+        return self
+
+
 class TokenCreateRequest(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
     entity_ids: list[str] = Field(..., min_length=1)
-    expires_in_seconds: int = Field(..., gt=0)
+    # Exactly one of these two. expires_in_seconds is a duration measured from
+    # the moment the link starts working; expires_at is an absolute epoch
+    # second — a check-out time — and is taken as written, whatever the start.
+    # NEVER_EXPIRES_SECONDS means "no expiry" in either field.
+    #
+    # "Exactly one" is enforced in the router rather than by a model_validator
+    # here: a model-level rejection is a 422 whose `input` is the whole request
+    # body, and the whole body includes the PIN. See `pin` below.
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
     # Epoch seconds the link starts working, or None for "right away". Capped
     # below the never-expires sentinel because a start beyond the end of every
     # expiry the app can express is not a schedule, it is a typo. A value in
@@ -139,6 +188,12 @@ class TokenCreateRequest(BaseModel):
     starts_at: int | None = Field(default=None, gt=0, lt=NEVER_EXPIRES_SECONDS)
     ip_allowlist: list[str] | None = None
     entity_meta: dict[str, dict[str, Any]] | None = None
+    # Weekly windows inside starts_at/expires_at. None or empty is "any time".
+    access_windows: list[AccessWindow] | None = Field(
+        default=None, max_length=MAX_ACCESS_WINDOWS
+    )
+    # None is unlimited. See guest_command for what a use is.
+    max_uses: int | None = Field(default=None, ge=1, le=MAX_USES_CAP)
     # Deliberately unconstrained here and validated in the router instead: a
     # Field(pattern=...) rejection becomes a 422 whose body echoes the offending
     # `input` back, which for this one field would put the PIN in a response.
@@ -175,7 +230,32 @@ class EntityMetaRequest(BaseModel):
 
 
 class TokenUpdateExpiryRequest(BaseModel):
-    expires_in_seconds: int = Field(..., gt=0)
+    """Exactly one of the two, same as on TokenCreateRequest."""
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
+
+
+class TokenScheduleRequest(BaseModel):
+    """Replace a token's timing after creation: start, end, windows, use limit.
+
+    A full replacement, not a patch — every field is the new value, and an
+    omitted one takes its default. The dashboard always has the whole schedule
+    in hand when it saves, and a partial update would leave "clear the windows"
+    and "leave the windows alone" needing two different spellings.
+
+    expires_at is absolute here and nowhere relative: editing a schedule is
+    choosing dates, and a duration would need an anchor the admin cannot see.
+    reset_uses zeroes the use counter, for handing a spent single-use link out
+    again; without it the count carries over, so raising max_uses from 1 to 2
+    on a used link grants exactly one more use.
+    """
+    starts_at: int | None = Field(default=None, gt=0, lt=NEVER_EXPIRES_SECONDS)
+    expires_at: int = Field(..., gt=0, le=NEVER_EXPIRES_SECONDS)
+    access_windows: list[AccessWindow] | None = Field(
+        default=None, max_length=MAX_ACCESS_WINDOWS
+    )
+    max_uses: int | None = Field(default=None, ge=1, le=MAX_USES_CAP)
+    reset_uses: bool = False
 
 
 # Template names come from the admin and are rendered back into the picker, so

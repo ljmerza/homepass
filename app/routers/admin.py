@@ -13,6 +13,7 @@ from app.auth import INGRESS_SENTINEL, SESSION_COOKIE, require_admin, verify_pas
 from app.config import settings
 from app import guest_pin
 from app import ha_client
+from app import schedule
 from app.models import (
     AdminLoginRequest,
     DISPLAY_NAME_MAX,
@@ -24,6 +25,7 @@ from app.models import (
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
     TokenPinRequest,
+    TokenScheduleRequest,
     TokenUpdateEntitiesRequest,
     TokenUpdateExpiryRequest,
 )
@@ -135,6 +137,45 @@ def _expires_at_from(expires_in_seconds: int, starts_at: int | None) -> int:
     return anchor + expires_in_seconds
 
 
+def _resolve_expiry(
+    expires_in_seconds: int | None,
+    expires_at: int | None,
+    starts_at: int | None,
+) -> int:
+    """The absolute expiry a create or renew asked for, from either field.
+
+    Exactly one of the two must be present. Checked here rather than in the
+    request model because a model-level rejection echoes the whole body back in
+    the 422, and on a create the whole body carries the PIN.
+
+    An absolute expires_at is a calendar fact — a check-out time — so it is
+    taken as written and never re-anchored to the start the way a duration is.
+    It does have to be in the future, and after the start if there is one: a
+    link whose last moment precedes its first is not a schedule, it is a typo,
+    and storing it would mint a token that is born dead.
+    """
+    if (expires_in_seconds is None) == (expires_at is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Provide exactly one of expires_in_seconds or expires_at",
+        )
+    if expires_in_seconds is not None:
+        return _expires_at_from(expires_in_seconds, starts_at)
+    if expires_at == NEVER_EXPIRES_SECONDS:
+        return NEVER_EXPIRES_SECONDS
+    if expires_at <= int(time.time()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expires_at must be in the future",
+        )
+    if starts_at and expires_at <= starts_at:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expires_at must be after starts_at",
+        )
+    return expires_at
+
+
 def _row_to_response(row: Any, entity_ids: list[str] | None = None,
                      entity_meta: dict[str, dict[str, Any]] | None = None) -> dict:
     ip_raw = row["ip_allowlist"]
@@ -164,6 +205,16 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
         # Whether, never what — the PIN is stored as a bcrypt hash and there is
         # no path that returns it or the hash to the dashboard.
         "has_pin": bool(row["pin_hash"]),
+        # None on every token without a weekly pattern. Parsed with the same
+        # function the guest gate uses, so the dashboard shows the windows the
+        # gate is actually enforcing.
+        "access_windows": schedule.windows_from_row(row["access_windows"]),
+        # max_uses None is unlimited, and uses_remaining is None with it.
+        "max_uses": row["max_uses"],
+        "use_count": row["use_count"],
+        "uses_remaining": (
+            max(0, row["max_uses"] - row["use_count"]) if row["max_uses"] is not None else None
+        ),
     }
 
 
@@ -212,7 +263,7 @@ async def create_token(
 
     slug = body.slug or _generate_slug()
     starts_at = _normalise_starts_at(body.starts_at)
-    expires_at = _expires_at_from(body.expires_in_seconds, starts_at)
+    expires_at = _resolve_expiry(body.expires_in_seconds, body.expires_at, starts_at)
 
     # Ensure slug uniqueness
     existing = await db.get_token_by_slug(slug)
@@ -231,9 +282,24 @@ async def create_token(
         entity_meta=_clean_entity_meta(body.entity_meta),
         pin_hash=await _hash_pin_or_none(body.pin),
         starts_at=starts_at,
+        access_windows=_windows_or_none(body.access_windows),
+        max_uses=body.max_uses,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
+
+
+def _windows_or_none(windows: list[Any] | None) -> list[dict[str, Any]] | None:
+    """The validated windows as plain dicts, or None for "any time".
+
+    An empty list is folded to None here, so the stored column has one
+    spelling for "no weekly pattern". The guest gate reads a stored empty list
+    as a schedule that never opens — the fail-closed answer for a corrupted
+    value — and an admin clearing the windows must not land in that state.
+    """
+    if not windows:
+        return None
+    return [w.model_dump() for w in windows]
 
 
 async def _hash_pin_or_none(value: Any) -> str | None:
@@ -376,13 +442,77 @@ async def update_token_expiry(
     # the guest that much access, measured from their check-in. Anchoring to
     # now instead would hand a still-pending token an expiry it might already
     # have passed by the time the link began working.
-    new_expires = _expires_at_from(body.expires_in_seconds, row["starts_at"])
+    new_expires = _resolve_expiry(
+        body.expires_in_seconds, body.expires_at, _normalise_starts_at(row["starts_at"])
+    )
     await db.update_token_expiry(token_id, new_expires)
     # Un-revoke if the token was revoked (admin is explicitly renewing it)
     if row["revoked"]:
         await db.unrevoke_token(token_id)
+    # Same reasoning for a use-limited link that has spent every use: Renew is
+    # the dashboard's action for a dead card, and a spent link is one. Only a
+    # spent one — extending a link with uses left must not hand back the ones
+    # already made.
+    if row["max_uses"] is not None and row["use_count"] >= row["max_uses"]:
+        await db.reset_token_uses(token_id)
     row = await db.get_token_by_id(token_id)
     return _row_to_response(row)
+
+
+@router.patch("/tokens/{token_id}/schedule")
+async def update_token_schedule(
+    token_id: str,
+    body: TokenScheduleRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Replace a token's timing: start, end, weekly windows and use limit.
+
+    The same rules as creation apply — a start in the past means "now", the
+    end must be in the future and after the start — so an edit cannot build a
+    schedule that creation would refuse.
+
+    A revoked token is refused rather than quietly rescheduled, as Activate
+    Now refuses one: revoking is the stronger statement, and Renew exists for
+    undoing it.
+
+    Every connected guest tab is told to re-check. One on the countdown may
+    have been given an earlier start, one that is live may have just lost its
+    window, and neither would otherwise learn it until its own boundary.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if row["revoked"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reschedule a revoked token",
+        )
+    starts_at = _normalise_starts_at(body.starts_at)
+    expires_at = _resolve_expiry(None, body.expires_at, starts_at)
+    await db.update_token_schedule(
+        token_id,
+        starts_at=starts_at,
+        expires_at=expires_at,
+        access_windows=_windows_or_none(body.access_windows),
+        max_uses=body.max_uses,
+        reset_uses=body.reset_uses,
+    )
+    await ha_client.broadcast_schedule_changed(token_id)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
+@router.get("/timezone")
+async def get_timezone(_: str = Depends(require_admin)) -> dict:
+    """The zone weekly windows are evaluated in, for the dashboard to label.
+
+    `source` is "setting" when the add-on option pins it, "home_assistant"
+    when it is HA's configured zone, and None when neither can be read — in
+    which case windowed links refuse access until one can, and the dashboard
+    says so.
+    """
+    name, source = await schedule.house_zone_name()
+    return {"timezone": name, "source": source}
 
 
 @router.patch("/tokens/{token_id}/pin")

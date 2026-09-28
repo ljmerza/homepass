@@ -34,6 +34,7 @@ Set these options in the add-on Configuration tab:
 | **Background Color** | Hex color for page background (e.g., `#F2F0E9`) |
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
+| **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
@@ -62,13 +63,25 @@ Click a selected entity to open its options:
 
 These belong to the link, not the entity. The same light can be on/off for the cleaner and fully adjustable for a house guest.
 
-## Expiry and scheduled start
+## When a link works
 
-Pick a preset duration (1 hour through 1 year), enter a custom one, or choose **Never expires**. You can extend an expiry later from the token's card.
+When creating a link, choose one of three modes under **Access**:
 
-**Valid From** is optional. Set a future date and time and the link can be sent immediately, but until then a guest who opens it sees a countdown and a greyed-out preview instead of working controls — no Home Assistant state reaches the page. The duration runs from the start, not from when you created the link: a 3-day link starting next Friday is three days of access beginning next Friday.
+- **Single use** — the link stops working once it has been used (set **Uses** above 1 for a few uses). A use is one control the guest presses and Home Assistant accepts. Opening the link does not count, and neither does a chat app such as WhatsApp loading it to draw a preview card, so sending the link cannot use it up. A failed command does not count either. A link with only cameras and sensors on it is never used up. **Valid until** is optional.
+- **No expiry** — works until you revoke it.
+- **Set a period** — works from **Starts** to **Ends**. Leave the start blank to start now. The quick buttons (+1 day, +7 days, …) set the end relative to the start.
 
-**Activate Now** opens a scheduled link straight away. Its expiry does not move, and a guest already waiting on the link is let in without reloading.
+Before its start, a guest who opens the link sees a countdown and a greyed-out preview instead of working controls — no Home Assistant state reaches the page, so the link can be sent days early.
+
+### Weekly times
+
+In **Set a period**, tick **Advanced: only on certain days and times** to limit the link to recurring weekly windows inside the period — "Tuesdays and Thursdays 09:00–13:00" for a cleaner, say. You can add several. An end earlier than the start runs past midnight, and the days you pick are the days the window *opens*: Friday 22:00–02:00 runs from Friday night into Saturday morning. End at 00:00 to run to midnight; 00:00–00:00 is the whole day.
+
+Times are in the house's time zone — Home Assistant's own, unless the **Time Zone** option overrides it. Outside every window the guest sees "Not active right now" with a countdown to the next one, and every part of the link — live state, commands, camera views — is refused. A page left open flips to the countdown when the window closes. If the time zone cannot be read, windowed links refuse access rather than guess.
+
+### Changing it later
+
+**Schedule** on a token's card edits all of the above after the link was created — start, end, weekly times and use limit — and moves any guest who has the link open onto the new schedule at once. Raising **Uses** on a used link grants the extra uses; **Reset the use count** starts it over. **Activate Now** opens a scheduled link straight away without moving its end. **Extend** / **Renew** pushes the end out, and on a used-up single-use link Renew also gives its uses back.
 
 ## PIN protection
 
@@ -99,11 +112,12 @@ Add a camera entity to a link and the guest gets a live view on their page. It i
 
 Each token's card offers:
 
-- **Extend** — push the expiry out. It reads **Renew** on a link that has already expired or been revoked.
+- **Extend** — push the expiry out. It reads **Renew** on a link that has already expired, been revoked or been used up.
+- **Schedule** — change the start, end, weekly times or use limit. See [When a link works](#when-a-link-works).
 - **Edit Entities** — change what is on the link, including the per-entity options.
 - **Add PIN / PIN Protected** — set, change or remove the PIN.
 - **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again.
-- **Duplicate** — start a new link pre-filled with this one's entities and IP allowlist.
+- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist and timing: the same mode, use limit, weekly times and length, starting now.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 
@@ -119,7 +133,11 @@ HomePass fires a `homepass_activity` event on Home Assistant's event bus when a 
 
 **A guest link looks broken in the HA sidebar.** Guest links are meant to be opened outside Home Assistant, on the direct port or your **Guest URL**. The sidebar panel is the admin dashboard.
 
-**The guest sees "This link is not active yet".** The link has a **Valid From** time that has not arrived. Use **Activate Now** if that was a mistake.
+**The guest sees "This link is not active yet".** The link has a start time that has not arrived. Use **Activate Now** if that was a mistake.
+
+**The guest sees "Not active right now".** The link has weekly times and it is outside all of them. Check the times against the zone shown under **Advanced** — it is the house's time zone, not the guest's.
+
+**The guest sees "Link Already Used".** A single-use link was used. **Renew** it, or raise its uses under **Schedule**.
 
 **A location-gated control says the link needs to be secure.** The guest is on `http://`. Set **Guest URL** to an HTTPS address.
 

@@ -27,7 +27,8 @@ installs, just a link.
 - **Scoped guest tokens** — each token grants access to a specific set of entities
 - **Time-limited access** — tokens expire after a chosen duration, or never
 - **Scheduled start** — an optional "valid from" time; the expiry is measured from the start, not from creation
-- **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint
+- **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint,
+  with revocable links that skip it and a per-link choice of whether it is remembered
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
@@ -251,6 +252,22 @@ one; it can never show you what it is. **A forgotten PIN is replaced, not
 recovered** — set a new one. Setting or clearing a PIN signs out every guest who
 had already entered the old one.
 
+**Remember PIN** is per link and on by default. Off, the PIN session is a
+browser-session cookie (no `Max-Age`), so the guest enters the PIN again on
+their next visit; the signed 24-hour expiry still applies on top. Turning it off
+signs out sessions that were being remembered.
+
+**Links without PIN** (`/g/{slug}?c=<code>`) are minted from the dashboard with
+an optional label. The code is 192 random bits, returned once and stored as a
+SHA-256 hash. Opening one checks it in constant time against that token's links,
+rate-limited per IP and per link, sets the same PIN session cookie a correct PIN
+would, and redirects to the bare `/g/{slug}` so the code leaves the address bar.
+The code is honoured on that page only — never on `/state`, `/stream`,
+`/command` or the camera routes — and skips the PIN but not the IP allowlist,
+expiry or revocation. The session it sets names the link, so revoking or
+rotating a link signs out the devices it let in. Changing or clearing the PIN,
+or rotating the slug, deletes every link. Up to 20 per token.
+
 ### Proximity requirement
 
 Per entity, off by default. With it on, pressing that one control asks the
@@ -296,7 +313,7 @@ grants `light.turn_on`. They decide what the guest UI draws.
 - **Rotate Link** — mints a new slug for an existing token. The old link stops
   working immediately, including any open SSE stream. Entities, overrides,
   expiry, PIN and access history survive, and a guest holding a PIN session is
-  asked for the PIN again.
+  asked for the PIN again. Links without PIN are deleted.
 
 ### IP allowlist
 
@@ -315,6 +332,7 @@ Hardcoded, not configurable.
 | Concurrent camera streams | 8, per link |
 | Refused proximity checks | 5/minute and 30/hour, per link |
 | PIN attempts | 5/minute and 20/hour per IP; 15/minute and 100/hour per link |
+| Link-without-PIN checks | 10/minute and 60/hour per IP; 30/minute and 300/hour per link |
 | Admin login attempts | 5/minute per IP |
 | Access log retention | 90 days, via `ACCESS_LOG_RETENTION_DAYS` |
 
@@ -328,6 +346,7 @@ the real ceiling.
 Browser (Guest PWA)
     │
     ├── GET  /g/{slug}               → PWA shell (HTML), or the PIN screen
+    │         ?c=<code>              → link without PIN: sets the session, redirects
     ├── POST /g/{slug}/pin           → PIN entry
     ├── GET  /g/{slug}/manifest.json → PWA manifest
     ├── GET  /g/{slug}/state         → initial entity states

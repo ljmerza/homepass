@@ -183,22 +183,35 @@
   <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center">
     <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">timer_off</span>
   </div>
-  <h2 class="text-2xl font-serif">Access Expired</h2>
-  <p class="text-muted max-w-xs">Your guest session has ended. {{ contact_message }}</p>
+  <h2 id="expired-title" class="text-2xl font-serif">Access Expired</h2>
+  <p class="text-muted max-w-xs"><span id="expired-body">Your guest session has ended.</span> {{ contact_message }}</p>
 </div>
 
 {% if pending %}
 <!-- Scheduled-start banner. Docked and compact rather than a full-screen
      blocker: the cards behind it are the guest's real ones, greyed out, so the
-     link can be shared ahead of time and still show what it will open. -->
+     link can be shared ahead of time and still show what it will open. The
+     same banner covers the gaps between weekly access windows; only the
+     wording changes with pending_reason. -->
 <div id="pending-banner" aria-live="polite" class="fixed bottom-0 inset-x-0 z-30 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark shadow-card">
   <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
     <div class="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center flex-shrink-0">
       <span aria-hidden="true" class="material-symbols-outlined text-accent">schedule</span>
     </div>
     <div class="flex-1 min-w-0">
-      <div class="text-sm font-semibold">Not active yet</div>
-      <div class="text-xs text-muted">Opens in <span id="pending-timer" class="font-mono font-bold tabular-nums text-accent"></span> · <span id="pending-when"></span></div>
+      <div class="text-sm font-semibold">
+        {%- if pending_reason == 'start' %}Not active yet
+        {%- elif pending_reason == 'window' %}Not active right now
+        {%- elif pending_reason == 'none' %}No more access times
+        {%- else %}Can't check this link's schedule right now{% endif -%}
+      </div>
+      {% if starts_at %}
+      <div class="text-xs text-muted">{% if pending_reason == 'window' %}Next access in{% else %}Opens in{% endif %} <span id="pending-timer" class="font-mono font-bold tabular-nums text-accent"></span> · <span id="pending-when"></span></div>
+      {% elif pending_reason == 'none' %}
+      <div class="text-xs text-muted">This link has no access times left before it expires. {{ contact_message }}</div>
+      {% else %}
+      <div class="text-xs text-muted">This page will try again in a minute.</div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -285,7 +298,16 @@ const REQUIRES_LOCATION = {{ requires_location | tojson }};
 // /state, /command or either camera endpoint — all of which the server refuses
 // until the window opens anyway.
 const PENDING = {{ pending | tojson }};
+// When the link next works — the start time, or the next weekly window. Null
+// when nothing opens again before expiry, or the schedule could not be checked;
+// PENDING_REASON says which, and the banner has no countdown in either case.
 const STARTS_AT = {{ starts_at | tojson }};
+const PENDING_REASON = {{ pending_reason | tojson }};
+// Set only on a live page of a token with weekly windows: when the current
+// window shuts. The page reloads there into the countdown. The server refuses
+// every request after that moment regardless, and its stream says so too —
+// this is the belt for a tab whose stream is down.
+const WINDOW_CLOSES_AT = {{ window_closes_at | tojson }};
 const PREVIEW_ENTITY_IDS = {{ preview_entity_ids | tojson }};
 const PREVIEW_ENTITY_META = {{ preview_entity_meta | tojson }};
 // The countdown is measured against the server's clock, not the device's: a
@@ -316,6 +338,20 @@ checkExpiry();
 let expiryInterval = setInterval(() => {
   if (document.visibilityState === 'visible') checkExpiry();
 }, 60000);
+
+// ── Weekly window watchdog ───────────────────────────────────────────
+// Checked every few seconds rather than once a minute like expiry: a window
+// is a boundary the guest can see coming, and controls that stay lit for a
+// minute past it look broken. Measured against the server clock, as the
+// pending countdown is.
+if (!PENDING && WINDOW_CLOSES_AT) {
+  setInterval(() => {
+    if (WINDOW_CLOSES_AT - (Date.now() / 1000 + CLOCK_OFFSET) <= 0) {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      location.reload();
+    }
+  }, 5000);
+}
 
 // ── Init ─────────────────────────────────────────────────────────────
 async function init() {
@@ -380,12 +416,21 @@ function startPending() {
   // still the guest's to use while they wait.
   container.querySelectorAll('button, input, select').forEach(el => el.disabled = true);
 
+  connectPendingSSE();
+  if (!STARTS_AT) {
+    // Nothing to count down to. A schedule that could not be checked is
+    // asked again shortly; one with no openings left waits for an admin edit,
+    // which the stream delivers.
+    if (PENDING_REASON === 'unknown') setTimeout(() => location.reload(), 60000);
+    return;
+  }
   // A guest days out wants the date, not a five-digit counter; both are shown.
-  document.getElementById('pending-when').textContent =
-    new Date(STARTS_AT * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  // Between weekly windows the weekday is what they plan around, so it leads.
+  document.getElementById('pending-when').textContent = PENDING_REASON === 'window'
+    ? new Date(STARTS_AT * 1000).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : new Date(STARTS_AT * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   updatePendingTimer();
   pendingInterval = setInterval(updatePendingTimer, 1000);
-  connectPendingSSE();
 }
 
 function updatePendingTimer() {
@@ -421,10 +466,13 @@ function activatePending() {
 function connectPendingSSE() {
   pendingEventSource = new EventSource(`${BASE}/g/${SLUG}/stream`);
   pendingEventSource.addEventListener('token_activated', activatePending);
-  pendingEventSource.addEventListener('token_expired', () => {
+  // An admin edited the timing: the countdown may be pointing at the wrong
+  // moment, so let the server decide again.
+  pendingEventSource.addEventListener('schedule_changed', activatePending);
+  pendingEventSource.addEventListener('token_expired', e => {
     pendingEventSource.close();
     pendingEventSource = null;
-    showExpired();
+    showExpired(expiredReason(e));
   });
 }
 
@@ -457,10 +505,21 @@ function connectSSE() {
 
   eventSource.addEventListener('reconnected', () => { refetchState(); });
 
-  eventSource.addEventListener('token_expired', () => {
+  eventSource.addEventListener('token_expired', e => {
     eventSource.close();
-    showExpired();
+    showExpired(expiredReason(e));
   });
+
+  // The weekly window just shut, or an admin changed the timing. Either way
+  // the server is the one that knows what this page should be now, and a
+  // reload re-runs every gate — landing on the countdown if access is over.
+  const reloadForSchedule = () => {
+    eventSource.close();
+    eventSource = null;
+    location.reload();
+  };
+  eventSource.addEventListener('window_closed', reloadForSchedule);
+  eventSource.addEventListener('schedule_changed', reloadForSchedule);
 
   eventSource.onerror = () => {
     badge.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-primary/10 text-primary';
@@ -492,7 +551,17 @@ function showPinEntry() {
   location.reload();
 }
 
-function showExpired() {
+function expiredReason(e) {
+  try { return JSON.parse(e.data).reason || null; } catch { return null; }
+}
+
+// `reason` is "used" when a use-limited link has just spent its last use, and
+// only changes the wording.
+function showExpired(reason = null) {
+  if (reason === 'used') {
+    document.getElementById('expired-title').textContent = 'Link Used';
+    document.getElementById('expired-body').textContent = 'This link has already been used.';
+  }
   const el = document.getElementById('expired-overlay');
   el.classList.remove('hidden');
   el.classList.add('flex');
@@ -1533,6 +1602,16 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
     });
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
+    if (r.status === 403 || r.status === 503) {
+      // Outside the link's access — a weekly window shut, or the schedule
+      // cannot be checked. The page reloads into the countdown rather than
+      // leaving a live-looking control that every tap will refuse.
+      const err = await r.clone().json().catch(() => ({}));
+      if (err.detail && typeof err.detail === 'object' && 'opens_at' in err.detail) {
+        location.reload();
+        return;
+      }
+    }
     if (gated && !r.ok) {
       // A gated control's refusal carries a reason worth repeating — "you need
       // to be at the property", "your location is out of date". Every other
@@ -1543,7 +1622,14 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
       return;
     }
     if (r.status === 429) { showToast('Too many requests — slow down'); return; }
-    if (!r.ok) showToast('Command failed');
+    if (!r.ok) { showToast('Command failed'); return; }
+    // Present only on a use-limited link. The last use is spent: the server
+    // has already hung up the other tabs on it, and this one says so too.
+    const result = await r.json().catch(() => ({}));
+    if (result.uses_remaining === 0) showExpired('used');
+    else if (typeof result.uses_remaining === 'number') {
+      showToast(`${result.uses_remaining} use${result.uses_remaining === 1 ? '' : 's'} left on this link`);
+    }
   } catch {
     showToast('You appear to be offline');
   }

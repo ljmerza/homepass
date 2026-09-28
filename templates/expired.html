@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Access Expired — {{ app_name }}{% endblock %}
+{% block title %}{% if reason == 'used' %}Link Already Used{% else %}Access Expired{% endif %} — {{ app_name }}{% endblock %}
 
 {% block head_extra %}
 <meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
@@ -19,8 +19,13 @@
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
       <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">timer_off</span>
     </div>
+    {% if reason == 'used' %}
+    <h1 class="text-2xl font-serif tracking-tight mb-2">Link Already Used</h1>
+    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">This link could only be used a limited number of times, and it has been. {{ contact_message }}</p>
+    {% else %}
     <h1 class="text-2xl font-serif tracking-tight mb-2">Access Expired</h1>
     <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">This guest session has ended or the link is no longer valid. {{ contact_message }}</p>
+    {% endif %}
   </div>
 {% endblock %}
 

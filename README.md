@@ -41,6 +41,7 @@ installs, just a link.
 - **Service allowlist** — only the services a domain's guest controls actually call are permitted
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
 - **IP allowlisting** — optionally restrict tokens to specific CIDRs
+- **Public REST API** — optional, key-authenticated `/api/v1` for automations and Node-RED, with Swagger docs (off by default)
 
 ## Installation
 
@@ -115,6 +116,8 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Background Color** | Hex color for page background | `#F2F0E9` |
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
+| **Enable API** | Serve the REST API under `/api/v1` | `false` |
+| **API Token** | `X-API-Key` value for the API (min 32 chars, required when enabled) | — |
 
 ### Docker Environment Variables
 
@@ -132,6 +135,8 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `BRAND_BG` | Background color (hex) | No | `#F2F0E9` |
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
+| `API_ENABLED` | Serve the REST API under `/api/v1` | No | `false` |
+| `API_TOKEN` | `X-API-Key` value for the API (min 32 chars) | When `API_ENABLED` | — |
 
 ## Home Assistant Activity Events
 
@@ -304,6 +309,34 @@ An optional comma-separated list of CIDRs, set when the link is created. It
 requires a reverse proxy that overwrites `X-Forwarded-For` with the real client
 address; without one, a client can claim any address it likes.
 
+## Public API
+
+Off by default. Set **Enable API** and an **API Token** of at least 32
+characters (`API_ENABLED=true` / `API_TOKEN=...` for Docker), then send the
+token as `X-API-Key`:
+
+```bash
+curl -H "X-API-Key: $HOMEPASS_API_TOKEN" http://<your-ha-ip>:5880/api/v1/tokens
+
+curl -X POST -H "X-API-Key: $HOMEPASS_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"label": "Cleaner", "entity_ids": ["lock.front_door"], "expires_at": 1798761600}' \
+  http://<your-ha-ip>:5880/api/v1/tokens
+```
+
+Endpoints under `/api/v1/tokens`: list, create, get, `PATCH` (label, entities,
+expiry, PIN), `DELETE`, and `POST .../{id}/revoke`, `renew`, `activate`,
+`rotate-slug` and `duplicate`. Each one runs the dashboard's own logic, so
+validation and side effects (open guest tabs being told a link was revoked, for
+instance) are identical. Expiries take `expires_at` (Unix seconds) or
+`expires_in_seconds`. A PIN can be set but is never returned.
+
+The key is the only credential — a dashboard session does not unlock the API.
+Swagger UI is at `/api/docs` (linked from the dashboard header) and the schema
+at `/api/openapi.json`; both need a dashboard login, and the schema also accepts
+the key. Swagger UI is bundled into the image at build time, pinned and
+checksummed, so the docs page runs under the same Content Security Policy as
+the rest of the app and nothing is loaded from a CDN.
+
 ## Limits
 
 Hardcoded, not configurable.
@@ -316,6 +349,7 @@ Hardcoded, not configurable.
 | Refused proximity checks | 5/minute and 30/hour, per link |
 | PIN attempts | 5/minute and 20/hour per IP; 15/minute and 100/hour per link |
 | Admin login attempts | 5/minute per IP |
+| Public API requests | 120/minute per IP |
 | Access log retention | 90 days, via `ACCESS_LOG_RETENTION_DAYS` |
 
 The command allowance is deliberately loose on the short window: the colour wheel

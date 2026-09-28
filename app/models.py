@@ -51,6 +51,7 @@ FORBIDDEN_DATA_KEYS = {"entity_id", "device_id", "area_id", "floor_id", "label_i
 class AdminLoginRequest(BaseModel):
     username: str
     password: str
+    remember: bool = False
 
 
 # Per-token presentation overrides. A display name is free text shown to the

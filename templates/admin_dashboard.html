@@ -63,6 +63,10 @@
         <input id="l-pass" type="password" required autocomplete="current-password"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20">
       </div>
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="l-remember" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">Remember me for a week</span>
+      </label>
       <div id="l-error" role="alert" class="text-primary text-xs min-h-[18px]"></div>
       <button data-action="do-login" class="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors">
         Sign in
@@ -475,12 +479,13 @@ function showLogin() {
 async function doLogin() {
   const user = document.getElementById('l-user').value;
   const pass = document.getElementById('l-pass').value;
+  const remember = document.getElementById('l-remember').checked;
   document.getElementById('l-error').textContent = '';
   try {
     const r = await fetch(`${BASE}/admin/login`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username: user, password: pass})
+      body: JSON.stringify({username: user, password: pass, remember})
     });
     if (r.ok) showApp();
     else document.getElementById('l-error').textContent = 'Invalid credentials.';

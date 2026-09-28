@@ -11,6 +11,7 @@ import pytest
 from app import database as db
 from app.auth import SESSION_COOKIE
 from app.models import NEVER_EXPIRES_SECONDS
+from app.routers.admin import ADMIN_SESSION_TTL, ADMIN_SESSION_TTL_REMEMBER
 
 
 # ---------------------------------------------------------------------------
@@ -34,6 +35,45 @@ async def test_login_success_creates_session_in_db(client, mock_ha_client, test_
     row = await db.get_admin_session(session_id)
     assert row is not None
     assert row["id"] == session_id
+
+
+async def test_login_default_session_is_24h(client, mock_ha_client, test_db):
+    """Without "remember me" the session and cookie both expire in 24 hours."""
+    before = int(time.time())
+    resp = await client.post(
+        "/admin/login",
+        json={"username": "testadmin", "password": "testpassword123"},
+    )
+    assert resp.status_code == 200
+
+    session_id = resp.cookies.get(SESSION_COOKIE)
+    row = await db.get_admin_session(session_id)
+    assert abs(row["expires_at"] - (before + ADMIN_SESSION_TTL)) <= 5
+    assert f"Max-Age={ADMIN_SESSION_TTL}" in resp.headers["set-cookie"]
+
+
+async def test_login_remember_me_extends_session_to_a_week(client, mock_ha_client, test_db):
+    """remember=true stores a 7-day expiry in the DB and on the cookie."""
+    before = int(time.time())
+    resp = await client.post(
+        "/admin/login",
+        json={"username": "testadmin", "password": "testpassword123", "remember": True},
+    )
+    assert resp.status_code == 200
+
+    session_id = resp.cookies.get(SESSION_COOKIE)
+    row = await db.get_admin_session(session_id)
+    assert abs(row["expires_at"] - (before + ADMIN_SESSION_TTL_REMEMBER)) <= 5
+    assert f"Max-Age={ADMIN_SESSION_TTL_REMEMBER}" in resp.headers["set-cookie"]
+
+
+async def test_login_remember_me_does_not_bypass_credentials(client, mock_ha_client, test_db):
+    """remember=true is not a way around a wrong password."""
+    resp = await client.post(
+        "/admin/login",
+        json={"username": "testadmin", "password": "wrongpassword", "remember": True},
+    )
+    assert resp.status_code == 401
 
 
 async def test_login_wrong_password(client, mock_ha_client, test_db):

@@ -34,6 +34,10 @@ router = APIRouter(prefix="/admin")
 # Admin session lifetime — 24 hours, hardcoded like Uptime Kuma / Dockge.
 ADMIN_SESSION_TTL = 86400
 
+# "Remember me" session lifetime — 7 days. Applied to both the DB row's
+# expires_at and the cookie max_age so neither can outlive the other.
+ADMIN_SESSION_TTL_REMEMBER = 604800
+
 # CSRF: Admin routes are protected by SameSite=strict cookie. The slug-based
 # guest auth acts as a bearer token — no additional CSRF token needed.
 
@@ -66,14 +70,15 @@ async def login(body: AdminLoginRequest, request: Request, response: Response) -
         request.url.scheme == "https"
         or forwarded_proto == "https"
     )
-    session_id = await db.create_admin_session(ttl_seconds=ADMIN_SESSION_TTL)
+    ttl = ADMIN_SESSION_TTL_REMEMBER if body.remember else ADMIN_SESSION_TTL
+    session_id = await db.create_admin_session(ttl_seconds=ttl)
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
         httponly=True,
         samesite="strict",
         secure=is_https,
-        max_age=ADMIN_SESSION_TTL,
+        max_age=ttl,
     )
     return {"ok": True}
 

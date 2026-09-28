@@ -90,9 +90,21 @@ You can put an optional 4–8 digit PIN on a link, either when creating it or la
 Two things to know:
 
 - **A forgotten PIN cannot be looked up.** PINs are stored hashed. The dashboard can tell you that a link has one; it can never tell you what it is. If a guest forgets it, set a new PIN and tell them the new one.
-- **Changing or removing a PIN signs out everyone who had entered the old one.** They are asked again on their next action.
+- **Changing or removing a PIN signs out everyone who had entered the old one.** They are asked again on their next action. It also retires every link without PIN (below).
 
 Guessing is rate-limited, so a PIN entered wrongly several times in a row starts being refused for a minute at a time. Wait and try again.
+
+**Remember the PIN on the guest's device** is on by default. Turn it off — in the create form, or in the PIN dialog, where it saves as soon as you tick it — and the guest's PIN entry only lasts until they close their browser, so they are asked again every time they reopen the link. That suits a link that never expires. Turning it off also asks anyone it was already remembered for to enter the PIN again. Some browsers restore a closed session when they reopen, and keep the entry with it; even then it never lasts past the usual 24 hours.
+
+### Links without PIN
+
+A PIN-protected card has **Copy link without PIN** and **QR without PIN**. Each makes a new link that opens straight to the controls, skipping the keypad — for a QR code on the fridge, say, while the link you text out still asks for the PIN. The guest is signed in the same way a correct PIN would sign them in, and the code is removed from the address bar straight away.
+
+- **Each link is shown once.** Like PINs, links are stored hashed, so copy it or show its QR when you make it. Lost one? Make another.
+- **Manage them in the PIN dialog** (**PIN Protected** on the card). It lists every link with an optional label, when it was made and when it was last used. **Rotate** replaces a link with a new one under the same label; **Revoke** removes it. Both sign out every device that had opened that link — other links and the PIN itself are unaffected.
+- **Changing or removing the PIN, or rotating the token's link, retires all of them.**
+- A link without PIN skips the PIN and nothing else. The IP allowlist, expiry, revocation and a scheduled start all still apply.
+- Up to 20 links per token.
 
 ## Requiring the guest to be at the property
 
@@ -115,9 +127,10 @@ Each token's card offers:
 - **Extend** — push the expiry out. It reads **Renew** on a link that has already expired, been revoked or been used up.
 - **Schedule** — change the start, end, weekly times or use limit. See [When a link works](#when-a-link-works).
 - **Edit Entities** — change what is on the link, including the per-entity options.
-- **Add PIN / PIN Protected** — set, change or remove the PIN.
-- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again.
-- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist and timing: the same mode, use limit, weekly times and length, starting now.
+- **Add PIN / PIN Protected** — set, change or remove the PIN, choose whether it is remembered, and manage links without PIN.
+- **Copy link without PIN / QR without PIN** — on PIN-protected links only; see above.
+- **Rotate Link** — generate a new link and kill the old one immediately. Entities, options, expiry, PIN and history are kept, so use this instead of rebuilding a token when a link has reached the wrong person. A guest who had entered the PIN is asked for it again, and links without PIN are retired.
+- **Duplicate** — start a new link pre-filled with this one's entities, IP allowlist, remember-PIN setting and timing: the same mode, use limit, weekly times and length, starting now. The PIN itself is not copied.
 - **Revoke** — stop the link working, keeping its history.
 - **Delete** — remove the token and its history.
 

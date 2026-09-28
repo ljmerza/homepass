@@ -100,6 +100,7 @@ async def create_token(
     starts_at: int | None = None,
     access_windows: list[dict[str, Any]] | None = None,
     max_uses: int | None = None,
+    remember_pin: bool = True,
 ) -> dict[str, Any]:
     db = await get_db()
     token_id = str(uuid.uuid4())
@@ -115,10 +116,10 @@ async def create_token(
         await db.execute(
             """INSERT INTO tokens
                (id, slug, label, created_at, starts_at, expires_at, ip_allowlist, pin_hash,
-                access_windows, max_uses)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                access_windows, max_uses, remember_pin)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (token_id, slug, label, now, starts_at, expires_at, ip_json, pin_hash,
-             windows_json, max_uses),
+             windows_json, max_uses, int(bool(remember_pin))),
         )
         if entity_ids:
             meta = entity_meta or {}
@@ -307,9 +308,36 @@ async def set_token_pin(token_id: str, pin_hash: str | None) -> None:
     Guest PIN sessions are signed with a key derived from this column, so a write
     here is also the revocation mechanism — outstanding sessions stop verifying
     with no session rows to delete.
+
+    The token's access links go in the same transaction. They are the other way
+    in past the PIN, and "change the PIN" is how an admin says "nobody who had
+    access keeps it" — a link surviving that would be the one exception they
+    did not know about. Clearing the PIN drops them too: they would bypass
+    nothing, and leaving them would revive them the moment a PIN was set again.
     """
     db = await get_db()
-    await db.execute("UPDATE tokens SET pin_hash = ? WHERE id = ?", (pin_hash, token_id))
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("UPDATE tokens SET pin_hash = ? WHERE id = ?", (pin_hash, token_id))
+        await db.execute("DELETE FROM token_access_codes WHERE token_id = ?", (token_id,))
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+
+
+async def set_token_remember_pin(token_id: str, remember_pin: bool) -> None:
+    """Choose whether a correct PIN is remembered across browser restarts.
+
+    Turning it off also signs out every guest holding a remembered session: the
+    session signature covers this setting (see app/guest_pin.py), so there is
+    nothing else to delete.
+    """
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET remember_pin = ? WHERE id = ?",
+        (int(bool(remember_pin)), token_id),
+    )
     await db.commit()
 
 
@@ -416,11 +444,22 @@ async def rotate_token_slug(token_id: str, new_slug: str) -> None:
     Everything else stays put — entities and their overrides, expiry, the PIN
     hash, and the access_log rows, which are keyed on token id and so are not
     touched by a slug write at all. This is for handing the same configuration
-    to a new guest, not for building a second token.
+    to a new guest, not for building a second token. The one exception is the
+    token's PIN-free access links, which are dropped — see below.
     """
     db = await get_db()
-    await db.execute("UPDATE tokens SET slug = ? WHERE id = ?", (new_slug, token_id))
-    await db.commit()
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("UPDATE tokens SET slug = ? WHERE id = ?", (new_slug, token_id))
+        # Every access link embeds the old slug, so each is already a dead URL —
+        # and rotation is for handing the token to someone else, which is not
+        # the person those links were minted for. Drop them rather than leave a
+        # list of links that no longer open anything.
+        await db.execute("DELETE FROM token_access_codes WHERE token_id = ?", (token_id,))
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
 
 
 async def delete_token(token_id: str) -> None:
@@ -439,6 +478,124 @@ async def touch_token(token_id: str) -> None:
         (int(time.time()), token_id),
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Access links (PIN-free)
+# ---------------------------------------------------------------------------
+# Only hashes are stored — see migration 010. Nothing here ever returns
+# code_hash to a caller that renders it; the admin router lists links through
+# list_access_codes(), which does not select the column.
+
+async def create_access_code(
+    token_id: str, code_hash: str, label: str | None
+) -> dict[str, Any]:
+    db = await get_db()
+    code_id = uuid.uuid4().hex
+    now = int(time.time())
+    await db.execute(
+        "INSERT INTO token_access_codes (id, token_id, code_hash, label, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (code_id, token_id, code_hash, label, now),
+    )
+    await db.commit()
+    return {"id": code_id, "label": label, "created_at": now, "last_used_at": None}
+
+
+async def list_access_codes(token_id: str) -> list[dict[str, Any]]:
+    db = await get_db()
+    async with db.execute(
+        "SELECT id, label, created_at, last_used_at FROM token_access_codes "
+        "WHERE token_id = ? ORDER BY created_at, id",
+        (token_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def count_access_codes(token_id: str) -> int:
+    db = await get_db()
+    async with db.execute(
+        "SELECT COUNT(*) FROM token_access_codes WHERE token_id = ?", (token_id,)
+    ) as cur:
+        return (await cur.fetchone())[0]
+
+
+async def get_access_code_hashes(token_id: str) -> list[tuple[str, str]]:
+    """(id, code_hash) for one token's links — the candidate set a redemption
+    compares against. Scoped to the token so a code minted for another one can
+    never match here."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT id, code_hash FROM token_access_codes WHERE token_id = ?", (token_id,)
+    ) as cur:
+        rows = await cur.fetchall()
+    return [(r["id"], r["code_hash"]) for r in rows]
+
+
+async def access_code_exists(token_id: str, code_id: str) -> bool:
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM token_access_codes WHERE id = ? AND token_id = ?",
+        (code_id, token_id),
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
+async def touch_access_code(code_id: str) -> None:
+    db = await get_db()
+    await db.execute(
+        "UPDATE token_access_codes SET last_used_at = ? WHERE id = ?",
+        (int(time.time()), code_id),
+    )
+    await db.commit()
+
+
+async def rotate_access_code(
+    token_id: str, code_id: str, code_hash: str
+) -> dict[str, Any] | None:
+    """Replace one link's secret, keeping its label. None if it is not on the token.
+
+    The replacement gets a new id rather than a new hash under the old one. A
+    guest session names the link that minted it by id, so a fresh id is what
+    signs out the devices the old link let in — rotating a link that leaked has
+    to mean the leak stops working, not only that the URL does.
+    """
+    db = await get_db()
+    new_id = uuid.uuid4().hex
+    now = int(time.time())
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            "SELECT label FROM token_access_codes WHERE id = ? AND token_id = ?",
+            (code_id, token_id),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            await db.execute("ROLLBACK")
+            return None
+        await db.execute("DELETE FROM token_access_codes WHERE id = ?", (code_id,))
+        await db.execute(
+            "INSERT INTO token_access_codes (id, token_id, code_hash, label, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (new_id, token_id, code_hash, row["label"], now),
+        )
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    return {"id": new_id, "label": row["label"], "created_at": now, "last_used_at": None}
+
+
+async def delete_access_code(token_id: str, code_id: str) -> bool:
+    """Revoke one link. False if it is not on the token."""
+    db = await get_db()
+    cur = await db.execute(
+        "DELETE FROM token_access_codes WHERE id = ? AND token_id = ?",
+        (code_id, token_id),
+    )
+    await db.commit()
+    return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------

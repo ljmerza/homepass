@@ -22,6 +22,23 @@
 
 {% block head_styles %}
 <style>
+  /* The tinted round shape that carries an entity's icon, after the Mushroom
+     cards. Its colour says what the entity is doing (entityColor() in
+     static/domains.js). It is decoration, not a control: the toggle, or the
+     card itself where the card is tappable, is what acts. */
+  .entity-shape {
+    width: 42px; height: 42px; border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background-color .3s ease;
+  }
+  .entity-shape .material-symbols-outlined {
+    font-size: 22px;
+    transition: color .3s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .entity-shape, .entity-shape .material-symbols-outlined { transition: none; }
+  }
   @keyframes cardPulse { 0% { opacity: .7; } 100% { opacity: 1; } }
   .pulse { animation: cardPulse .4s ease-out; }
   @keyframes pingDot { 0% { transform: scale(1); opacity: 1; } 75%, 100% { transform: scale(2); opacity: 0; } }
@@ -619,12 +636,10 @@ function renderAll() {
   let html = '';
   for (const domain of sortedDomains) {
     const label = domainLabel(domain);
-    const icon = DOMAIN_ICONS[domain] || 'devices';
-    const color = DOMAIN_COLORS[domain] || { text: 'text-muted' };
-    html += `<div class="flex items-center gap-2 pt-5 pb-2 px-1">
-      <span aria-hidden="true" class="material-symbols-outlined text-base ${color.text}">${icon}</span>
-      <span class="text-[11px] font-mono font-bold uppercase tracking-widest text-muted">${esc(label)}</span>
-    </div>`;
+    // Quieter than the cards under it: a heading that competes with the
+    // entities makes the list harder to scan, not easier. A real heading
+    // element, so a screen reader can jump from one group to the next.
+    html += `<h2 class="pt-5 pb-2 px-1 text-[13px] font-semibold text-muted">${esc(label)}</h2>`;
     // Within a domain, order by what the guest actually sees: the per-token
     // display name if set, then the HA friendly name, then the entity id.
     const ordered = groups[domain].slice().sort((a, b) =>
@@ -642,11 +657,13 @@ function buildCard(eid, state) {
   const domain = eid.split('.')[0];
   const name = displayName(eid, state);
   const stateStr = state.state;
-  const color = DOMAIN_COLORS[domain] || { bg: 'bg-gray-500/10', text: 'text-gray-500', icon: 'bg-gray-500' };
   const icon = DOMAIN_ICONS[domain] || 'devices';
 
-  const isOff = isDimmedState(domain, stateStr);
-  const opacityClass = isOff ? 'opacity-60' : '';
+  // Only the shape goes quiet when an entity is idle. Fading the whole card
+  // for "off", as this used to, took the name down with it — and the name is
+  // what a guest reads to find the thing they came for. An entity HA cannot
+  // reach still dims whole.
+  const opacityClass = isDimmedState(domain, stateStr) ? 'opacity-60' : '';
 
   let controls = '';
   if (domain === 'camera') controls = buildCameraControls(eid, state);
@@ -687,14 +704,14 @@ function buildCard(eid, state) {
     ? `data-action="card-toggle" data-eid="${esc(eid)}" data-domain="${domain}" role="button" tabindex="0" aria-label="${esc(tr('card.toggle', { name }))}" `
     : '';
 
-  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 mb-2.5 shadow-card border border-border-light dark:border-border-dark ${hasToggle ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
+  // Borderless, after Mushroom: the shadow alone lifts the card off the page,
+  // which reads softer than a ruled box and lets the tinted shape lead.
+  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 mb-2 shadow-card ${hasToggle ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl ${color.bg} flex items-center justify-center flex-shrink-0">
-        <span aria-hidden="true" class="material-symbols-outlined ${color.text}" id="icon-${cssId(eid)}">${icon}</span>
-      </div>
+      ${entityShapeHtml(eid, domain, state, icon)}
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-semibold truncate${locationBadge ? ' flex items-center gap-1' : ''}">${esc(name)}${locationBadge}</div>
-        <div class="text-xs text-muted" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
+        <div class="text-sm font-semibold leading-tight truncate${locationBadge ? ' flex items-center gap-1' : ''}">${esc(name)}${locationBadge}</div>
+        <div class="text-xs text-muted leading-tight mt-0.5" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
       </div>
       ${toggleHtml}
     </div>
@@ -702,10 +719,46 @@ function buildCard(eid, state) {
   </div>`;
 }
 
+// The shape's colour from the entity's state. A bulb's own colour arrives as
+// numbers, not as a class, so it is set as a style — the channels are clamped
+// integers by then (lightRgb), never a string off the wire.
+function shapeStyles(color) {
+  if (!color.rgb) return { shape: '', icon: '' };
+  const [r, g, b] = color.rgb;
+  return { shape: `rgb(${r} ${g} ${b} / 0.2)`, icon: `rgb(${r} ${g} ${b})` };
+}
+
+function entityShapeHtml(eid, domain, state, icon) {
+  const color = entityColor(domain, state);
+  const styles = shapeStyles(color);
+  return `<div class="entity-shape ${color.bg}" id="shape-${cssId(eid)}"${styles.shape ? ` style="background-color: ${styles.shape}"` : ''}>
+        <span aria-hidden="true" class="material-symbols-outlined ${color.text}" id="icon-${cssId(eid)}"${styles.icon ? ` style="color: ${styles.icon}"` : ''}>${icon}</span>
+      </div>`;
+}
+
+// Repaint a card's shape after a live update, so the colour keeps tracking
+// what the entity is doing. Cards rebuilt wholesale get theirs from buildCard.
+function applyEntityColor(eid, domain, state) {
+  const shape = document.getElementById(`shape-${cssId(eid)}`);
+  const icon = document.getElementById(`icon-${cssId(eid)}`);
+  if (!shape || !icon) return;
+  const color = entityColor(domain, state);
+  const styles = shapeStyles(color);
+  shape.className = `entity-shape ${color.bg}`;
+  shape.style.backgroundColor = styles.shape;
+  icon.className = `material-symbols-outlined ${color.text}`;
+  icon.style.color = styles.icon;
+}
+
+// Home Assistant drops every attribute of an unavailable entity, friendly_name
+// included, and the server stands in an empty state for one HA did not return
+// at all. Falling straight back to the id put a raw "light.hall_lamp" in
+// front of the guest; tidied up it is a guess, but a legible one, and it only
+// ever shows for an entity that is already broken.
 function displayName(eid, state) {
   const override = entityMeta[eid]?.display_name;
   if (override) return override;
-  return state?.attributes?.friendly_name || eid;
+  return state?.attributes?.friendly_name || previewName(eid).trim() || eid;
 }
 
 function entityOption(eid, key) {
@@ -805,20 +858,14 @@ function formatState(domain, stateStr, state) {
   return esc(stateStr === 'on' ? tr('state.on') : stateStr === 'off' ? tr('state.off') : rawState(stateStr));
 }
 
-// Domains whose state is a reading or a stored value rather than an on/off
-// signal — "off" means nothing to them, so only a missing entity dims the card.
-const VALUE_STATE_DOMAINS = ['sensor', 'binary_sensor', 'camera', 'schedule', 'alarm_control_panel',
-  'counter', 'timer', 'input_number', 'input_text', 'input_select',
-  'time', 'datetime', 'input_datetime'];
-
+// Whether the whole card dims: only for an entity HA cannot reach or has no
+// value for. Being switched off is not that — the shape's colour already says
+// "idle", and the name has to stay readable either way.
 function isDimmedState(domain, stateStr) {
   // A button that has never been pressed reports 'unknown'. That is its resting
   // state, not an unavailable entity.
   if (domain === 'button' || domain === 'input_button') return stateStr === 'unavailable';
-  if (VALUE_STATE_DOMAINS.includes(domain)) {
-    return stateStr === 'unavailable' || stateStr === 'unknown';
-  }
-  return stateStr === 'off' || stateStr === 'unavailable' || stateStr === 'unknown';
+  return stateStr === 'unavailable' || stateStr === 'unknown';
 }
 
 function buildCameraControls(eid, state) {
@@ -1033,10 +1080,10 @@ function buildClimateControls(eid, state) {
       <div class="text-xs text-muted mt-1 font-mono" id="temp-tgt-${cssId(eid)}">${esc(climateTargetText(target, unit, humidity))}</div>
     </div>
     <div class="flex items-center justify-center gap-6 mt-3">
-      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="-0.5" aria-label="${esc(tr('climate.decrease'))}" class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
+      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="-0.5" aria-label="${esc(tr('climate.decrease'))}" class="w-11 h-11 rounded-full bg-surface-light dark:bg-surface-dark shadow-sm flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined">remove</span>
       </button>
-      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="0.5" aria-label="${esc(tr('climate.increase'))}" class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
+      <button data-action="adjust-temp" data-eid="${esc(eid)}" data-delta="0.5" aria-label="${esc(tr('climate.increase'))}" class="w-11 h-11 rounded-full bg-surface-light dark:bg-surface-dark shadow-sm flex items-center justify-center text-lg font-semibold active:scale-95 transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined">add</span>
       </button>
     </div>
@@ -1071,15 +1118,15 @@ function buildLockControls(eid, state) {
   const supportsOpen = (Number(state.attributes?.supported_features) & 1) !== 0;
   return `<div class="mt-3 grid ${supportsOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-2">
   <button data-action="confirm-lock" data-eid="${esc(eid)}" data-locked="${locked}" id="lock-btn-${cssId(eid)}"
-    class="w-full py-3 rounded-xl border-2 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]
+    class="w-full py-3 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]
     ${locked
-      ? 'border-primary/30 text-primary bg-primary/5'
-      : 'border-ink/30 text-ink bg-ink/5'}">
+      ? 'text-primary bg-primary/10'
+      : 'text-ink bg-ink/10'}">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">${locked ? 'lock' : 'lock_open'}</span>
     ${esc(locked ? tr('lock.tap_unlock') : tr('lock.tap_lock'))}
   </button>
   ${supportsOpen ? `<button data-action="confirm-lock-open" data-eid="${esc(eid)}"
-    class="w-full py-3 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+    class="w-full py-3 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">meeting_room</span>
     ${esc(tr('lock.open'))}
   </button>` : ''}
@@ -1116,13 +1163,13 @@ function buildMediaControls(eid, state) {
 
 function buildCoverControls(eid) {
   return `<div class="flex gap-2 mt-3">
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="open_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="open_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
       <span aria-hidden="true" class="material-symbols-outlined text-base">expand_less</span> ${esc(tr('cover.open_action'))}
     </button>
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="stop_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="stop_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
       <span aria-hidden="true" class="material-symbols-outlined text-base">stop</span> ${esc(tr('cover.stop_action'))}
     </button>
-    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="close_cover" class="flex-1 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+    <button data-action="cover-cmd" data-eid="${esc(eid)}" data-service="close_cover" class="flex-1 py-2.5 rounded-xl bg-soot/[0.06] dark:bg-white/10 text-sm font-display font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
       <span aria-hidden="true" class="material-symbols-outlined text-base">expand_more</span> ${esc(tr('cover.close_action'))}
     </button>
   </div>`;
@@ -1167,17 +1214,17 @@ function buildAlarmControls(eid, state) {
 
   const armButtons = modes.map(m => `<button data-action="confirm-alarm" data-eid="${esc(eid)}"
     data-service="${m.service}" data-title="${esc(tr('alarm.arm_title', { mode: m.label }))}" data-body="${esc(tr('alarm.arm_body', { mode: m.label }))}"
-    class="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl border-2 font-display font-semibold text-xs transition-colors active:scale-[0.98] ${
+    class="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl font-display font-semibold text-xs transition-colors active:scale-[0.98] ${
       state.state === m.armed
-        ? 'border-rose-600/40 text-rose-600 bg-rose-600/10'
-        : 'border-border-light dark:border-border-dark text-muted'}">
+        ? 'text-rose-600 bg-rose-600/15'
+        : 'bg-soot/[0.06] dark:bg-white/10 text-muted'}">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">${m.icon}</span>
     ${esc(m.label)}
   </button>`).join('');
 
   const disarm = state.state === 'disarmed' ? '' : `<button data-action="confirm-alarm" data-eid="${esc(eid)}"
     data-service="alarm_disarm" data-title="${esc(tr('alarm.disarm_title'))}" data-body="${esc(tr('alarm.disarm_body'))}"
-    class="w-full mt-2 py-3 rounded-xl border-2 border-ink/30 text-ink bg-ink/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+    class="w-full mt-2 py-3 rounded-xl text-ink bg-ink/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
     <span aria-hidden="true" class="material-symbols-outlined text-lg">lock_open</span>
     ${esc(tr('alarm.disarm'))}
   </button>`;
@@ -1192,7 +1239,7 @@ function buildAlarmControls(eid, state) {
 function buildPressControls(eid, domain) {
   return `<div class="mt-3">
     <button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="${domain}" data-service="press"
-      class="w-full py-3 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+      class="w-full py-3 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
       <span aria-hidden="true" class="material-symbols-outlined text-lg">radio_button_checked</span>
       ${esc(tr('button.press'))}
     </button>
@@ -1203,7 +1250,7 @@ function buildCounterControls(eid, state) {
   const value = isNaN(Number(state.state)) ? '--' : state.state;
   const btn = (service, icon, label, extra = '') => `<button data-action="svc-cmd" data-eid="${esc(eid)}"
     data-domain="counter" data-service="${service}" aria-label="${esc(label)}"
-    class="w-11 h-11 rounded-full border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center active:scale-95 transition-transform ${extra}">
+    class="w-11 h-11 rounded-full bg-soot/[0.06] dark:bg-white/10 flex items-center justify-center active:scale-95 transition-transform ${extra}">
     <span aria-hidden="true" class="material-symbols-outlined">${icon}</span>
   </button>`;
   return `<div class="mt-3 flex items-center justify-center gap-4">
@@ -1243,12 +1290,12 @@ function buildTimerControls(eid, state) {
     <div class="text-center text-2xl font-serif tabular-nums mb-3">${esc(timerRemaining(state))}</div>
     <div class="grid ${idle ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
       <button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="timer" data-service="${running ? 'pause' : 'start'}"
-        class="py-2.5 rounded-xl border-2 border-accent/30 text-accent bg-accent/5 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+        class="py-2.5 rounded-xl text-accent bg-accent/10 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined text-lg">${running ? 'pause' : 'play_arrow'}</span>
         ${esc(running ? tr('timer.pause') : state.state === 'paused' ? tr('timer.resume') : tr('timer.start'))}
       </button>
       ${idle ? '' : `<button data-action="svc-cmd" data-eid="${esc(eid)}" data-domain="timer" data-service="cancel"
-        class="py-2.5 rounded-xl border-2 border-primary/30 text-primary bg-primary/5 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+        class="py-2.5 rounded-xl text-primary bg-primary/10 font-display font-semibold text-sm flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
         <span aria-hidden="true" class="material-symbols-outlined text-lg">stop</span>
         ${esc(tr('timer.cancel'))}
       </button>`}
@@ -1374,8 +1421,8 @@ function updateCard(eid, state) {
   const stateEl = document.getElementById(`state-${cssId(eid)}`);
   if (stateEl) stateEl.textContent = formatState(domain, state.state, state);
 
-  const isOff = isDimmedState(domain, state.state);
-  card.classList.toggle('opacity-60', isOff);
+  card.classList.toggle('opacity-60', isDimmedState(domain, state.state));
+  applyEntityColor(eid, domain, state);
 
   // Domain-specific updates may replaceChild, so pulse is handled there
   const rebuilds = REBUILD_DOMAINS.includes(domain);
@@ -1403,7 +1450,6 @@ function updateLightCard(eid, state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 
   // Which controls the card carries, against which it should carry now. A
   // colour tick echoes back several times a second, so this compares both
@@ -1452,7 +1498,6 @@ function updateToggleCard(state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 }
 
 function updateClimateCard(eid, state) {
@@ -1528,8 +1573,8 @@ function updateLockCard(eid, state) {
   }
   const btn = document.getElementById(`lock-btn-${cssId(eid)}`);
   if (btn) {
-    btn.className = `w-full py-3 rounded-xl border-2 font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] ${
-      locked ? 'border-primary/30 text-primary bg-primary/5' : 'border-ink/30 text-ink bg-ink/5'
+    btn.className = `w-full py-3 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] ${
+      locked ? 'text-primary bg-primary/10' : 'text-ink bg-ink/10'
     }`;
     btn.innerHTML = `<span aria-hidden="true" class="material-symbols-outlined text-lg">${locked ? 'lock' : 'lock_open'}</span>${esc(locked ? tr('lock.tap_unlock') : tr('lock.tap_lock'))}`;
     btn.dataset.locked = String(locked);
@@ -1562,7 +1607,6 @@ function updateFanCard(eid, state, card) {
     toggle.classList.toggle('on', on);
     toggle.setAttribute('aria-checked', String(on));
   }
-  card.classList.toggle('opacity-60', !on);
 
   const sliderSection = card.querySelector('[data-slider-section]');
   const hasSlider = sliderSection && sliderSection.querySelector('input[type=range]');

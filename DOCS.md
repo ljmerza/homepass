@@ -39,6 +39,14 @@ Set these options in the add-on Configuration tab:
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
+### Changing settings from the dashboard
+
+The **Settings** button (the sliders icon in the dashboard header) edits App Name, Contact Message, Guest URL, both colours and how many days of activity to keep. Changes apply straight away, with no restart.
+
+A value saved there **overrides** the add-on option. The option stays underneath: the dialog shows which fields are overridden and what the option says, and **Revert** puts the option back in charge. While a field is overridden, changing that option in the Configuration tab has no effect. Saving a field back to the same value as its option clears the override.
+
+Admin username and password, and the Home Assistant connection, can only be changed in the add-on configuration. A mistake there could lock you out of the dashboard, and they are not something a browser session should be able to read or change.
+
 ## Choosing entities
 
 The picker lists every entity in a domain HomePass supports: lights, switches, groups, climate, locks, alarm panels, media players, covers, fans, buttons, counters, timers, the `input_*` helpers, time and date helpers, and the read-only sensors, cameras and schedules. Scripts, scenes and automations are deliberately absent, because running one would take a guest outside the entities you picked.
@@ -111,7 +119,7 @@ Each token's card offers:
 
 **IP Allowlist** is set when the link is created and is a comma-separated list of CIDRs (`192.168.1.0/24`). It only means anything if HomePass sits behind a reverse proxy that overwrites the client address; on a bare LAN setup it is easy to bypass. To change it later, duplicate the link and revoke the old one.
 
-**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
+**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days, or as set under **Settings**.
 
 ## Notifications
 

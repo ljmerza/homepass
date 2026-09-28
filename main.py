@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import ha_client
+from app import settings_store
 from app.config import settings
 from app.context import base_context
 from app.ingress import get_guest_link_target, get_ingress_path
@@ -41,6 +42,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.critical("Failed to initialize database at %s: %s", settings.db_path, exc)
         raise RuntimeError(f"Database initialization failed: {exc}") from exc
+
+    # Before anything renders or reads a setting. A failure here is not fatal:
+    # the add-on options underneath every override are still a working config.
+    try:
+        await settings_store.load()
+    except Exception:
+        logger.exception("Could not apply dashboard setting overrides — using the add-on options")
 
     ha_client.init_client()  # sync — no await
 

@@ -1,6 +1,8 @@
 """Pydantic request/response models."""
 from typing import Any
-from pydantic import BaseModel, Field
+from urllib.parse import urlsplit
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NEVER_EXPIRES_SECONDS = 4102444800  # 2099-12-31T00:00:00Z
 
@@ -236,3 +238,98 @@ class TokenResponse(BaseModel):
     ip_allowlist: list[str] | None
     entity_count: int
     entity_ids: list[str] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Runtime settings (see app/settings_store.py)
+# ---------------------------------------------------------------------------
+# Caps for the values an admin can override from the dashboard. They are shown
+# to guests (app name, contact message) or interpolated into links and a
+# <style> block (guest URL, colours), so each is bounded and shape-checked here
+# rather than trusted because it came from an admin.
+APP_NAME_MAX = 64
+CONTACT_MESSAGE_MAX = 500
+GUEST_URL_MAX = 300
+RETENTION_DAYS_MAX = 3650
+HEX_COLOR_PATTERN = r"^#[0-9A-Fa-f]{6}$"
+
+# A guest URL is a base that "/g/<slug>" is appended to, then copied into a
+# message to a guest and dropped into a JavaScript string on the dashboard. So
+# it has to be exactly scheme://host[:port][/path] — no query or fragment the
+# slug would land inside, no user:pass@ that would ride along to the guest, and
+# none of the characters that could end a string or an attribute.
+_GUEST_URL_FORBIDDEN_CHARS = set(" \t\r\n\"'<>`\\{}|^")
+
+
+def normalise_guest_url(value: str) -> str:
+    """A cleaned guest base URL, or "" for none. Raises ValueError on a bad one."""
+    value = value.strip().rstrip("/")
+    if not value:
+        return ""
+    if any(c in _GUEST_URL_FORBIDDEN_CHARS for c in value):
+        raise ValueError("Guest URL contains characters a link cannot carry")
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("Guest URL must start with http:// or https:// and name a host")
+    if parts.query or parts.fragment or "?" in value or "#" in value:
+        raise ValueError("Guest URL cannot have a query string or fragment")
+    if "@" in parts.netloc:
+        raise ValueError("Guest URL cannot contain a username or password")
+    try:
+        parts.port
+    except ValueError as exc:
+        raise ValueError("Guest URL has an invalid port") from exc
+    return value
+
+
+class SettingsUpdateRequest(BaseModel):
+    """Overrides for the deployment settings an admin may change live.
+
+    The field list IS the allowlist: app/settings_store.py derives the editable
+    keys from it, and extra="forbid" turns an attempt to set anything else —
+    admin_password, ha_token, db_path — into a 422 instead of a silent no-op.
+
+    Every field is optional so a save can carry only what changed. An explicit
+    null is refused: reverting to the add-on option is its own DELETE, and a
+    null that quietly meant "revert" would make a malformed save look like one.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    app_name: str | None = Field(default=None, max_length=APP_NAME_MAX)
+    contact_message: str | None = Field(default=None, max_length=CONTACT_MESSAGE_MAX)
+    brand_bg: str | None = Field(default=None, pattern=HEX_COLOR_PATTERN)
+    brand_primary: str | None = Field(default=None, pattern=HEX_COLOR_PATTERN)
+    guest_url: str | None = Field(default=None, max_length=GUEST_URL_MAX)
+    # strict: JSON true would otherwise be accepted as 1 day.
+    access_log_retention_days: int | None = Field(
+        default=None, ge=1, le=RETENTION_DAYS_MAX, strict=True,
+    )
+
+    @field_validator("app_name", "contact_message")
+    @classmethod
+    def _required_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("brand_bg", "brand_primary")
+    @classmethod
+    def _upper_hex(cls, value: str | None) -> str | None:
+        # One spelling per colour, so #d9523c and the #D9523C default compare
+        # equal and the default-palette shortcut in app/theme.py still applies.
+        return value.upper() if value is not None else value
+
+    @field_validator("guest_url")
+    @classmethod
+    def _guest_url(cls, value: str | None) -> str | None:
+        return normalise_guest_url(value) if value is not None else value
+
+    @model_validator(mode="after")
+    def _no_explicit_null(self):
+        for name in self.model_fields_set:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null — revert it instead")
+        return self

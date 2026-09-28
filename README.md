@@ -37,6 +37,7 @@ installs, just a link.
 - **Installable PWA** — guests can add it to their home screen for an app-like experience
 - **Dark mode** — system-aware with manual override
 - **Admin dashboard** — create, revoke, extend, and monitor tokens
+- **Live settings** — change the app name, contact message, Guest URL, colours and log retention from the dashboard, no restart
 - **Recent activity** — see guest link opens and commands in the admin dashboard
 - **Service allowlist** — only the services a domain's guest controls actually call are permitted
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
@@ -117,6 +118,22 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Background Color** | Hex color for page background | `#F2F0E9` |
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
+
+### Settings in the dashboard
+
+App name, contact message, Guest URL, both colours and access-log retention
+can also be changed live from the dashboard's **Settings** dialog. Precedence,
+highest first:
+
+1. A value saved in the dashboard (stored in the SQLite database)
+2. The add-on option, or the environment variable in Docker
+3. The built-in default
+
+**Revert** removes the dashboard value so the option applies again. Nothing is
+copied into the database on upgrade, so an install that never opens the dialog
+behaves exactly as before. Credentials and connection settings (`ADMIN_*`,
+`HA_BASE_URL`, `HA_TOKEN`, `DB_PATH`, `PORT`) can only be set as options or
+environment variables.
 
 ### Docker Environment Variables
 

@@ -490,3 +490,48 @@ async def delete_entity_template(template_id: str) -> None:
     db = await get_db()
     await db.execute("DELETE FROM entity_templates WHERE id = ?", (template_id,))
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# App settings overrides
+# ---------------------------------------------------------------------------
+# Admin-edited values layered over the add-on options — see
+# app/settings_store.py for which keys are allowed and in what order they win.
+# This layer stores JSON and knows nothing about the keys.
+
+async def get_app_settings() -> dict[str, Any]:
+    """key -> decoded value. A row that no longer decodes is skipped, not fatal:
+    the option it overrode is still there to fall back on."""
+    db = await get_db()
+    async with db.execute("SELECT key, value FROM app_settings") as cur:
+        rows = await cur.fetchall()
+    stored: dict[str, Any] = {}
+    for r in rows:
+        try:
+            stored[r["key"]] = json.loads(r["value"])
+        except (ValueError, TypeError):
+            logger.warning("Ignoring unreadable stored setting %r", r["key"])
+    return stored
+
+
+async def set_app_settings(changes: dict[str, Any]) -> None:
+    """Upsert several overrides in one transaction, so a save is all or nothing."""
+    db = await get_db()
+    now = int(time.time())
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.executemany(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            [(key, json.dumps(value), now) for key, value in changes.items()],
+        )
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+
+
+async def delete_app_setting(key: str) -> None:
+    db = await get_db()
+    await db.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+    await db.commit()

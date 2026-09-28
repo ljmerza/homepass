@@ -13,6 +13,7 @@ from app.auth import INGRESS_SENTINEL, SESSION_COOKIE, require_admin, verify_pas
 from app.config import settings
 from app import guest_pin
 from app import ha_client
+from app import settings_store
 from app.models import (
     AdminLoginRequest,
     DISPLAY_NAME_MAX,
@@ -20,6 +21,7 @@ from app.models import (
     EntityMetaRequest,
     EntityTemplateCreateRequest,
     NEVER_EXPIRES_SECONDS,
+    SettingsUpdateRequest,
     SUPPORTED_DOMAINS,
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
@@ -553,6 +555,40 @@ async def delete_entity_template(template_id: str, _: str = Depends(require_admi
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await db.delete_entity_template(template_id)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Runtime settings
+# ---------------------------------------------------------------------------
+# The deployment settings that are safe to change while the app runs. Which
+# ones, and why the rest stay add-on options, is in app/settings_store.py.
+# Same CSRF footing as every other admin write: the SameSite=strict session
+# cookie, and a JSON body a cross-site form cannot produce.
+
+@router.get("/settings")
+async def read_settings(_: str = Depends(require_admin)) -> dict:
+    return {"settings": settings_store.snapshot()}
+
+
+@router.patch("/settings")
+async def update_settings(
+    body: SettingsUpdateRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No changes")
+    await settings_store.apply(changes)
+    return {"settings": settings_store.snapshot()}
+
+
+@router.delete("/settings/{key}")
+async def revert_setting(key: str, _: str = Depends(require_admin)) -> dict:
+    """Drop one override so the add-on option applies again."""
+    if key not in settings_store.EDITABLE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not an editable setting")
+    await settings_store.revert(key)
+    return {"settings": settings_store.snapshot()}
 
 
 # ---------------------------------------------------------------------------

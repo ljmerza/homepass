@@ -15,6 +15,7 @@ from app import database as db
 from app import geoip
 from app import ha_client
 from app import local_network
+from app import i18n
 from app import settings_store
 from app.api_auth import api_enabled
 from app.config import settings
@@ -177,7 +178,7 @@ async def root(request: Request):
 
 @app.get("/admin/dashboard", include_in_schema=False)
 async def admin_dashboard_page(request: Request):
-    ctx = base_context(request)
+    ctx = base_context(request, i18n.ADMIN)
     is_ingress = bool(ctx["base_path"])
     # Only the sidebar needs the Supervisor lookup: there the admin is on HA's
     # origin and guest links have to point at the add-on's published port.

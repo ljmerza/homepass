@@ -1257,6 +1257,10 @@ async function suggestInto(containerId, category) {
   suggested.forEach(({ entity_id }) => {
     if (known.has(entity_id) && !pickerState.selected.has(entity_id)) {
       pickerState.selected.add(entity_id);
+      // Same defaults as adding by hand or from a template, so a lock the
+      // "Doors & locks" chip adds is home-network-only exactly as it would be
+      // had the admin ticked it themselves.
+      applyEntityDefaults(pickerState, entity_id);
       added++;
     }
   });

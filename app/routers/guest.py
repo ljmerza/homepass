@@ -34,6 +34,7 @@ from app import local_network
 from app import proximity
 from app import schedule
 from app.build import BUILD_VERSION, STATIC_DIR
+from app.client_ip import client_ip as resolve_client_ip
 from app.config import settings
 from app.context import base_context
 from app.models import (
@@ -244,34 +245,20 @@ templates = Jinja2Templates(directory="templates")
 # ---------------------------------------------------------------------------
 
 def _client_ip(request: Request) -> str:
-    """Extract the client IP from X-Forwarded-For (set by reverse proxy).
-
-    IMPORTANT: HomePass MUST be deployed behind a reverse proxy (Caddy, nginx,
-    Cloudflare Tunnel, etc.) that overwrites the X-Forwarded-For header with the
-    true client IP. Without this, clients can spoof their IP to bypass allowlists.
+    """The guest's address. X-Forwarded-For is only believed from a trusted
+    proxy (the trusted_proxies option) — see app/client_ip.py.
     """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return resolve_client_ip(request)
 
 
 def _from_home_network(request: Request) -> bool:
-    """Whether this request comes from the home network, by its whole path.
+    """Whether this request comes from the home network.
 
-    _client_ip() alone is not enough here: it is the first X-Forwarded-For
-    entry, which the client writes. See local_network.chain_is_local for why
-    every hop is checked. Every X-Forwarded-For header is read, not only the
-    first, so a proxy that adds its own header line beside a forged one is
-    still seen.
+    Uses the same client address as every other check: X-Forwarded-For only
+    counts when it arrives from a trusted proxy, read right to left, so a
+    client cannot earn a home address by writing one into the header.
     """
-    hops = [
-        hop.strip()
-        for header in request.headers.getlist("X-Forwarded-For")
-        for hop in header.split(",")
-    ]
-    hops.append(request.client.host if request.client else "unknown")
-    return local_network.chain_is_local(hops)
+    return local_network.contains(_client_ip(request))
 
 
 def _enforce_ip_allowlist(row, request: Request) -> None:

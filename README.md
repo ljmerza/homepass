@@ -421,12 +421,8 @@ proximity requirement: the add-on option says what the home network is, and
 each link says which controls need it — including ones a domain list would miss,
 like an alarm panel's disarm.
 
-The check does not take `X-Forwarded-For` on trust. Every address in the header,
-and the address the connection actually came from, has to be inside the ranges
-or in private address space (a reverse proxy on the LAN, a Docker bridge). So a
-request from outside cannot pass by writing a LAN address into the header,
-whether or not a proxy sits in front and whether that proxy overwrites the
-header or appends to it. Two setups need thought:
+The check uses the same client address as the IP allowlist (see
+[Trusted proxies](#trusted-proxies)). Two setups need thought:
 
 - **Tunnels and public URLs.** A guest on your Wi-Fi who opens the public link
   (a Cloudflare Tunnel, Nabu Casa, or hairpin NAT) usually reaches HomePass from
@@ -466,8 +462,23 @@ grants `light.turn_on`. They decide what the guest UI draws.
 ### IP allowlist
 
 An optional comma-separated list of CIDRs, set when the link is created. It
-requires a reverse proxy that overwrites `X-Forwarded-For` with the real client
-address; without one, a client can claim any address it likes.
+checks the client address described under [Trusted proxies](#trusted-proxies).
+
+### Trusted proxies
+
+Every per-address decision — the IP and country allowlists, the home-network
+gate and the rate limits — uses one client address. `X-Forwarded-For` is only
+believed when the connection comes from a trusted proxy, and is then read right
+to left, skipping trusted hops, so a client cannot choose its own address by
+sending the header. Loopback is always trusted. The **Trusted Proxies** option
+(`TRUSTED_PROXIES`, comma-separated CIDRs) sets the rest; left empty, the add-on
+trusts Home Assistant's internal network (`172.30.32.0/23`: ingress and proxy
+add-ons such as NGINX Proxy Manager or Cloudflared), and standalone trusts
+loopback only.
+
+A proxy that is not trusted is treated as the client: every guest behind it
+shares its address, allowlists refuse them, and HomePass logs a warning once
+naming the address to add.
 
 ### Country allowlist
 

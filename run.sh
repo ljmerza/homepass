@@ -18,6 +18,7 @@ mapping = {
     'guest_url': 'GUEST_URL',
     'timezone': 'TIMEZONE',
     'local_network_cidrs': 'LOCAL_NETWORK_CIDRS',
+    'trusted_proxies': 'TRUSTED_PROXIES',
     'api_enabled': 'API_ENABLED',
     'api_token': 'API_TOKEN',
 }

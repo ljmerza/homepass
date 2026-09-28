@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from starlette.datastructures import Headers
 
 from app import database as db
 from app import geoip

@@ -1,4 +1,4 @@
-"""The home-network checks read the whole forwarding chain, not the first entry.
+"""The home-network checks cannot be earned with a forged X-Forwarded-For.
 
 The per-entity home-network gate and the country allowlist's home-network
 exemption both widen what a request may do, so a client writing a LAN address
@@ -70,26 +70,6 @@ async def _unlock(peer: str, headers=None) -> httpx.Response:
 
 
 # ---------------------------------------------------------------------------
-# The chain arithmetic
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("chain, expected", [
-    ([LAN_GUEST], True),                          # LAN device, nothing in front
-    ([LAN_GUEST, "127.0.0.1"], True),             # through a proxy on the host
-    ([LAN_GUEST, "172.30.32.1"], True),           # through a Docker bridge
-    ([LAN_GUEST, "10.0.0.2", "::1"], True),       # two private hops
-    ([LAN_GUEST, PUBLIC], False),                 # forged; peer is the attacker
-    ([LAN_GUEST, PUBLIC, "127.0.0.1"], False),    # forged; an appending proxy
-    ([PUBLIC, "127.0.0.1"], False),               # an overwriting proxy
-    (["10.9.9.9", "127.0.0.1"], False),           # private, but not the home range
-    ([LAN_GUEST, "unknown"], False),              # a hop that is not an address
-    ([], False),
-])
-def test_chain_is_local(home_network, chain, expected):
-    assert local_network.chain_is_local(chain) is expected
-
-
-# ---------------------------------------------------------------------------
 # The home-network gate
 # ---------------------------------------------------------------------------
 
@@ -129,9 +109,10 @@ async def test_a_lan_device_with_nothing_in_front_is_let_through(
     mock_ha_client["call_service"].assert_called_once()
 
 
-async def test_a_lan_device_behind_a_lan_proxy_is_let_through(
-    gated_token, home_network, mock_ha_client
+async def test_a_lan_device_behind_a_trusted_lan_proxy_is_let_through(
+    gated_token, home_network, mock_ha_client, monkeypatch
 ):
+    monkeypatch.setattr(settings, "trusted_proxies", "172.17.0.0/16")
     resp = await _unlock("172.17.0.1", {"X-Forwarded-For": LAN_GUEST})
     assert resp.status_code == 200
     mock_ha_client["call_service"].assert_called_once()
@@ -161,6 +142,16 @@ async def test_a_forged_lan_address_does_not_skip_the_country_check(
     assert resp.status_code == 403
     assert resp.json()["detail"] == "Country not allowed"
     mock_ha_client["get_states"].assert_not_called()
+
+
+async def test_an_untrusted_lan_proxy_is_the_client(
+    gated_token, home_network, mock_ha_client
+):
+    # Not in trusted_proxies: its header is ignored and the proxy itself,
+    # outside the home range, is the client.
+    resp = await _unlock("172.17.0.1", {"X-Forwarded-For": LAN_GUEST})
+    assert resp.status_code == 403
+    mock_ha_client["call_service"].assert_not_called()
 
 
 async def test_a_real_lan_device_still_skips_the_country_check(

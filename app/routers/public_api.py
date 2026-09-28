@@ -10,6 +10,12 @@ that hangs up live guest streams, the rotation that retries on a slug collision
 — so a rule tightened for the dashboard is tightened here in the same edit.
 What is genuinely new is only what the dashboard has no need for: an absolute
 expiry, and one PATCH that changes several things at once.
+
+Every token field the dashboard can set is reachable here too — the weekly
+windows and use limit (on create, and through /schedule), remember-PIN and the
+device lock (on create and PATCH), the country allowlist (on create, like the
+IP allowlist), links without PIN, and Unbind — each through the same admin
+handler the dashboard calls, so the guest-side effects are the dashboard's.
 """
 import json
 import time
@@ -25,6 +31,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import ha_client
+from app import schedule
 from app.api_auth import (
     API_PRINCIPAL,
     api_enabled,
@@ -37,11 +44,17 @@ from app.auth import require_admin
 from app.context import base_context
 from app.models import (
     NEVER_EXPIRES_SECONDS,
+    AccessCodeCreateRequest,
+    ApiAccessCode,
+    ApiAccessCodeCreated,
     ApiTokenCreateRequest,
     ApiTokenDuplicateRequest,
     ApiTokenRenewRequest,
     ApiTokenResponse,
     ApiTokenUpdateRequest,
+    TokenDeviceBindingRequest,
+    TokenRememberPinRequest,
+    TokenScheduleRequest,
 )
 from app.routers import admin
 
@@ -155,7 +168,8 @@ async def get_token(token_id: str) -> dict:
 
 @router.patch("/tokens/{token_id}", response_model=ApiTokenResponse)
 async def update_token(token_id: str, body: ApiTokenUpdateRequest) -> dict:
-    """Change any of label, entities, expiry and PIN in one call.
+    """Change any of label, entities, expiry, PIN, remember-PIN and the
+    device lock in one call.
 
     Everything is validated before anything is written, so a bad PIN does not
     leave the entity list changed. The expiry change leaves a revocation in
@@ -187,9 +201,77 @@ async def update_token(token_id: str, body: ApiTokenUpdateRequest) -> dict:
     if expires_at is not None:
         await db.update_token_expiry(token_id, expires_at)
     if "pin" in sent:
-        # Also ends every guest PIN session for the token — see set_token_pin.
+        # Also ends every guest PIN session for the token, and retires its
+        # links without PIN — see set_token_pin.
         await db.set_token_pin(token_id, pin_hash)
+    if body.remember_pin is not None:
+        await admin.update_token_remember_pin(
+            token_id, TokenRememberPinRequest(remember_pin=body.remember_pin), _=API_PRINCIPAL
+        )
+    if body.device_binding is not None and body.device_binding != bool(row["device_binding"]):
+        # The dashboard's toggle: clears any claim and hangs up open streams.
+        await admin.update_device_binding(
+            token_id, TokenDeviceBindingRequest(enabled=body.device_binding), _=API_PRINCIPAL
+        )
     return await _full_token(token_id)
+
+
+@router.put("/tokens/{token_id}/schedule", response_model=ApiTokenResponse)
+async def replace_schedule(token_id: str, body: TokenScheduleRequest) -> dict:
+    """Replace the token's timing: `starts_at`, an absolute `expires_at`,
+    `access_windows` and `max_uses`, plus `reset_uses`.
+
+    A full replacement — an omitted field takes its default, so leaving out
+    `access_windows` clears them. Open guest tabs are told to re-check.
+    """
+    return await admin.update_token_schedule(token_id, body, _=API_PRINCIPAL)
+
+
+@router.post("/tokens/{token_id}/unbind", response_model=ApiTokenResponse)
+async def unbind_device(token_id: str) -> dict:
+    """Release a device-locked token's claim so the next device can take it."""
+    await admin.unbind_device(token_id, _=API_PRINCIPAL)
+    return await _full_token(token_id)
+
+
+@router.get("/tokens/{token_id}/access-codes", response_model=list[ApiAccessCode])
+async def list_access_codes(token_id: str) -> list[dict]:
+    """The token's links without PIN: labels and timestamps, never the codes."""
+    return await admin.list_access_codes(token_id, _=API_PRINCIPAL)
+
+
+@router.post(
+    "/tokens/{token_id}/access-codes",
+    response_model=ApiAccessCodeCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_access_code(
+    token_id: str, body: AccessCodeCreateRequest | None = None
+) -> dict:
+    """Mint a link that skips the PIN. The response is the only place the code
+    appears. The token must have a PIN and not be revoked."""
+    return await admin.create_access_code(
+        token_id, body or AccessCodeCreateRequest(), _=API_PRINCIPAL
+    )
+
+
+@router.post(
+    "/tokens/{token_id}/access-codes/{code_id}/rotate",
+    response_model=ApiAccessCodeCreated,
+)
+async def rotate_access_code(token_id: str, code_id: str) -> dict:
+    """Replace one link with a new code under the same label, signing out the
+    devices the old one let in."""
+    return await admin.rotate_access_code(token_id, code_id, _=API_PRINCIPAL)
+
+
+@router.delete(
+    "/tokens/{token_id}/access-codes/{code_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_access_code(token_id: str, code_id: str) -> Response:
+    """Revoke one link, signing out the devices it let in."""
+    await admin.delete_access_code(token_id, code_id, _=API_PRINCIPAL)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -238,13 +320,24 @@ async def rotate_token_slug(token_id: str) -> dict:
     status_code=status.HTTP_201_CREATED,
 )
 async def duplicate_token(token_id: str, body: ApiTokenDuplicateRequest | None = None) -> dict:
-    """Create a new token from an existing one's entities and IP allowlist.
+    """Create a new token from an existing one's entities, allowlists, weekly
+    windows, use limit, remember-PIN and device-lock settings.
 
     The slug, PIN and scheduled start are not copied; pass new ones in the
-    body if the copy needs them.
+    body if the copy needs them. The use count starts at zero, and a device
+    claim or links without PIN never carry over.
     """
     body = body or ApiTokenDuplicateRequest()
     row = await _row_or_404(token_id)
+    windows = schedule.windows_from_row(row["access_windows"])
+    if row["access_windows"] is not None and not windows:
+        # The guest gate reads an unreadable schedule as "never open", but the
+        # create path folds an empty list to "any time" — copying it as-is
+        # would turn a closed link into an unrestricted one.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The source token's weekly windows are unreadable; set them with /schedule first",
+        )
 
     starts_at = admin._normalise_starts_at(body.starts_at)
     expires_at = _resolve_expiry(body, starts_at)
@@ -267,6 +360,18 @@ async def duplicate_token(token_id: str, body: ApiTokenDuplicateRequest | None =
         ip_allowlist=json.loads(row["ip_allowlist"]) if row["ip_allowlist"] else None,
         starts_at=starts_at,
         pin=body.pin,
+        # Access policy, carried for the same reason as the overrides above: a
+        # copy must not be a looser link than its source. Each is re-validated
+        # by the create path — the countries against the installed database,
+        # the windows by the model — so a stored value that no longer passes
+        # fails the copy rather than slipping through.
+        access_windows=windows,
+        max_uses=row["max_uses"],
+        remember_pin=bool(row["remember_pin"]),
+        device_binding=bool(row["device_binding"]),
+        country_allowlist=(
+            json.loads(row["country_allowlist"]) if row["country_allowlist"] else None
+        ),
     )
     created = await admin._create_token(create, expires_at=expires_at)
     return await _full_token(created["id"])

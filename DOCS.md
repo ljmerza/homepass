@@ -185,15 +185,19 @@ Send the token in the `X-API-Key` header on every request. A dashboard login doe
 | `GET` | `/api/v1/tokens` | List tokens |
 | `POST` | `/api/v1/tokens` | Create a token |
 | `GET` | `/api/v1/tokens/{id}` | One token, with entities and per-entity options |
-| `PATCH` | `/api/v1/tokens/{id}` | Change label, entities, expiry or PIN |
+| `PATCH` | `/api/v1/tokens/{id}` | Change label, entities, expiry, PIN, remember-PIN or the device lock |
+| `PUT` | `/api/v1/tokens/{id}/schedule` | Replace start, end, weekly times and use limit |
+| `POST` | `/api/v1/tokens/{id}/unbind` | Release a device lock's claim |
+| `GET` / `POST` | `/api/v1/tokens/{id}/access-codes` | List or make links without PIN (a new code is shown once) |
+| `POST` / `DELETE` | `/api/v1/tokens/{id}/access-codes/{code_id}[/rotate]` | Rotate or revoke one link without PIN |
 | `DELETE` | `/api/v1/tokens/{id}` | Delete a token and its history |
 | `POST` | `/api/v1/tokens/{id}/revoke` | Revoke |
 | `POST` | `/api/v1/tokens/{id}/renew` | New expiry, and un-revoke |
 | `POST` | `/api/v1/tokens/{id}/activate` | Start a scheduled token now |
 | `POST` | `/api/v1/tokens/{id}/rotate-slug` | New link, old one stops working |
-| `POST` | `/api/v1/tokens/{id}/duplicate` | Copy entities, options and IP allowlist into a new token |
+| `POST` | `/api/v1/tokens/{id}/duplicate` | Copy entities, options, allowlists, weekly times, use limit, remember-PIN and device-lock settings into a new token |
 
-Anything that sets an expiry takes either `expires_at` (Unix seconds — handy for a check-out time) or `expires_in_seconds`, not both. Creating a token runs the same checks as the dashboard. Responses never include a PIN, only `has_pin`.
+Anything that sets an expiry takes either `expires_at` (Unix seconds — handy for a check-out time) or `expires_in_seconds`, not both. Creating a token runs the same checks as the dashboard and accepts every field the dashboard sets — weekly times, use limit, remember-PIN, device lock and country allowlist included. Responses never include a PIN, only `has_pin`.
 
 With the API enabled, the dashboard header gets an **API Docs** link to an interactive Swagger page at `/api/docs`. The page and the schema at `/api/openapi.json` need a dashboard login (the schema also accepts the API key). The API is limited to 120 requests a minute per client IP.
 

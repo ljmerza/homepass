@@ -423,6 +423,13 @@ class ApiTokenUpdateRequest(BaseModel):
     expires_in_seconds: int | None = Field(default=None, gt=0)
     expires_at: int | None = Field(default=None, gt=0, le=NEVER_EXPIRES_SECONDS)
     pin: str | None = None
+    # Same effect as the dashboard's remember-PIN checkbox.
+    remember_pin: bool | None = None
+    # Applied only when it differs from the stored value. The dashboard's
+    # toggle clears the claim in either direction, and a PATCH that repeated
+    # the current value — the common "send the whole object back" client —
+    # must not quietly lock the guest's own phone out of their link.
+    device_binding: bool | None = None
 
 
 class ApiTokenRenewRequest(BaseModel):
@@ -436,10 +443,12 @@ class ApiTokenDuplicateRequest(BaseModel):
     """Overrides for a copy of an existing token. Every field is optional.
 
     What is copied and what is not follows the dashboard's Duplicate: the
-    entities and the IP allowlist carry over; the slug, the PIN and the
-    scheduled start do not, because they belong to one guest's stay. With no
-    expiry given, a never-expiring source gives a never-expiring copy and
-    anything else gets 24 hours.
+    entities, the IP and country allowlists, the weekly windows, the use limit
+    (with a fresh count), remember-PIN and the device-lock setting carry over;
+    the slug, the PIN, the scheduled start, a device claim and links without
+    PIN do not, because they belong to one guest's stay. With no expiry given,
+    a never-expiring source gives a never-expiring copy and anything else gets
+    24 hours.
     """
     label: str | None = Field(default=None, min_length=1, max_length=200)
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
@@ -453,6 +462,21 @@ class ApiEntityMeta(BaseModel):
     display_name: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
     require_proximity: bool = False
+    require_local_network: bool = False
+
+
+class ApiAccessCode(BaseModel):
+    """A PIN-free access link as listed. The code itself is never readable."""
+    id: str
+    label: str | None
+    created_at: int
+    last_used_at: int | None
+
+
+class ApiAccessCodeCreated(ApiAccessCode):
+    """A freshly minted or rotated link. `code` appears here and nowhere else;
+    the guest opens /g/<slug>?c=<code>."""
+    code: str
 
 
 class ApiTokenResponse(BaseModel):
@@ -474,6 +498,14 @@ class ApiTokenResponse(BaseModel):
     entity_ids: list[str] | None = None
     entity_meta: dict[str, ApiEntityMeta] | None = None
     has_pin: bool
+    remember_pin: bool
+    access_windows: list[AccessWindow] | None
+    max_uses: int | None
+    use_count: int
+    uses_remaining: int | None
+    country_allowlist: list[str] | None
+    device_binding: bool
+    device_bound_at: int | None
 
 
 # ---------------------------------------------------------------------------

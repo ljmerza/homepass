@@ -4,6 +4,7 @@ Converts hex colors into the RGB-triplet CSS custom properties that Tailwind
 reads (e.g. ``--color-bg-light: 242 240 233``). Dark-mode colors are
 auto-derived by darkening the background and adjusting supporting colors.
 """
+from functools import lru_cache
 
 
 def _hex_to_rgb(h: str) -> tuple[int, int, int]:
@@ -126,8 +127,13 @@ def palette_css(brand_bg: str, brand_primary: str) -> str:
     return "\n".join(lines)
 
 
-# Pre-computed at import time — env vars require a restart to change.
-from app.config import settings  # noqa: E402
+@lru_cache(maxsize=16)
+def brand_theme(brand_bg: str, brand_primary: str) -> tuple[str, str]:
+    """(palette <style> body, dark background hex) for the given brand colours.
 
-brand_css = palette_css(settings.brand_bg, settings.brand_primary)
-brand_bg_dark = dark_bg(settings.brand_bg)
+    Keyed on the colours rather than computed once at import: they can be
+    overridden from the dashboard (app/settings_store.py) while the process
+    runs, and a palette baked in at startup would keep serving the old one. The
+    cache makes the per-request lookup free for the colours actually in use.
+    """
+    return palette_css(brand_bg, brand_primary), dark_bg(brand_bg)

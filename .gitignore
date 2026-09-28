@@ -28,3 +28,6 @@ htmlcov/
 # macOS resource forks and metadata
 ._*
 .DS_Store
+
+# Fetched at build time (Dockerfile) — Swagger UI for /api/docs
+static/vendor/

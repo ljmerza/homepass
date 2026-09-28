@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import ha_client
+from app.api_auth import api_enabled
 from app.config import settings
 from app.context import base_context
 from app.ingress import get_ingress_path
@@ -142,10 +143,11 @@ async def security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
-# Always mounted; every route in it answers 404 while the API is disabled.
+# Always mounted; every route in both answers 404 while the API is disabled.
 # Registering them conditionally at import would tie the decision to whatever
 # the settings said when the module loaded, and leave nothing to test.
 app.include_router(public_api.router)
+app.include_router(public_api.docs_router)
 app.add_exception_handler(RequestValidationError, public_api.api_validation_error_handler)
 
 
@@ -161,6 +163,7 @@ async def admin_dashboard_page(request: Request):
         "never_expires": NEVER_EXPIRES_SECONDS,
         "is_ingress": bool(ctx["base_path"]),
         "guest_url": settings.guest_url,
+        "api_enabled": api_enabled(),
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 

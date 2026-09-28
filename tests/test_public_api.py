@@ -1,20 +1,24 @@
-"""Public REST API (/api/v1).
+"""Public REST API (/api/v1) and its Swagger UI (/api/docs).
 
 The properties under test:
 
   * the API does not exist until it is enabled with a long-enough key — every
-    route answers 404 until then;
+    route, the docs and the schema included, answers 404 until then;
   * the X-API-Key header is the only credential: an admin session or ingress
     does not unlock /api/v1, and a missing, wrong or non-ASCII key is a 401;
   * the key check is rate limited per IP, and guesses spend the allowance;
   * every action goes through the admin router's own logic, so the validation
     (CIDRs, PINs, slugs) and the side effects (hanging up guest streams,
     invalidating the entity cache) are the dashboard's;
-  * a PIN never comes back in a response, including a 422.
+  * a PIN never comes back in a response, including a 422;
+  * the schema lists /api/v1 and nothing else, and names the ingress prefix;
+  * the docs page needs an admin, loads only versioned /static assets, has no
+    inline script, and is served under the unchanged app-wide CSP.
 
 Real routing, real DB, real bcrypt, real rate limiter; only ha_client is mocked.
 """
 import json
+import re
 import time
 from unittest.mock import patch
 
@@ -23,6 +27,7 @@ import pytest
 
 import app.ingress
 from app import api_auth
+from app import build
 from app import database as db
 from app.config import Settings, settings
 from app.models import NEVER_EXPIRES_SECONDS
@@ -69,6 +74,8 @@ async def _create(client, **overrides) -> dict:
     ("GET", "/api/v1/tokens"),
     ("POST", "/api/v1/tokens"),
     ("GET", "/api/v1/tokens/whatever"),
+    ("GET", "/api/docs"),
+    ("GET", "/api/openapi.json"),
 ])
 async def test_disabled_api_is_not_there(client, mock_ha_client, test_db, admin_session, method, path):
     """Off by default. Even the correct key and an admin session find nothing."""
@@ -169,6 +176,16 @@ async def test_key_guesses_spend_the_rate_limit(client, mock_ha_client, test_db,
             resp = await client.get("/api/v1/tokens", headers={"X-API-Key": "wrong"})
             assert resp.status_code == 401
         resp = await client.get("/api/v1/tokens", headers=HEADERS)
+    assert resp.status_code == 429
+
+
+async def test_schema_route_shares_the_rate_limit(client, mock_ha_client, test_db, api_on):
+    """The schema also accepts the key, so it must not be a side door for guessing."""
+    with patch.object(api_auth, "API_RATE_LIMIT_PER_MINUTE", 2):
+        for _ in range(2):
+            resp = await client.get("/api/openapi.json", headers={"X-API-Key": "wrong"})
+            assert resp.status_code == 401
+        resp = await client.get("/api/openapi.json", headers=HEADERS)
     assert resp.status_code == 429
 
 
@@ -488,6 +505,123 @@ async def test_duplicate_overrides(client, mock_ha_client, test_db, api_on):
         "Next guest", "next-guest", True, expires_at,
     )
     assert PIN not in resp.text
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI schema
+# ---------------------------------------------------------------------------
+
+async def test_schema_lists_only_the_public_api(client, mock_ha_client, test_db, api_on):
+    resp = await client.get("/api/openapi.json", headers=HEADERS)
+    assert resp.status_code == 200
+    schema = resp.json()
+    paths = schema["paths"]
+    assert "/api/v1/tokens" in paths
+    assert "/api/v1/tokens/{token_id}/duplicate" in paths
+    assert all(p.startswith("/api/v1/") for p in paths), list(paths)
+    assert "servers" not in schema
+    [scheme] = schema["components"]["securitySchemes"].values()
+    assert scheme == {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+
+
+async def test_schema_needs_key_or_admin(client, mock_ha_client, test_db, api_on, admin_session):
+    assert (await client.get("/api/openapi.json")).status_code == 401
+    assert (await client.get("/api/openapi.json", headers={"X-API-Key": "no"})).status_code == 401
+    assert (await client.get("/api/openapi.json", cookies=admin_session)).status_code == 200
+
+
+async def test_schema_names_the_ingress_prefix(client, mock_ha_client, test_db, api_on):
+    """Swagger resolves operations against `servers`; without the prefix, Try it
+    out would hit Home Assistant's own /api instead of the add-on."""
+    with patch.object(app.ingress, "_SUPERVISOR_TOKEN", "fake-supervisor-token"):
+        resp = await client.get("/api/openapi.json", headers={"X-Ingress-Path": INGRESS_PREFIX})
+    assert resp.status_code == 200
+    assert resp.json()["servers"] == [{"url": INGRESS_PREFIX}]
+    # The cached base schema was not mutated for the next caller.
+    resp = await client.get("/api/openapi.json", headers=HEADERS)
+    assert "servers" not in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Swagger UI page
+# ---------------------------------------------------------------------------
+
+SCRIPT_TAG_RE = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.S)
+
+
+def _script_src(csp: str) -> str:
+    return next(d for d in csp.split(";") if d.strip().startswith("script-src")).strip()
+
+
+async def test_docs_page_needs_an_admin(client, mock_ha_client, test_db, api_on):
+    resp = await client.get("/api/docs", headers=HEADERS)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/admin/dashboard"
+
+
+async def test_docs_page_runs_under_the_normal_csp(client, mock_ha_client, test_db, api_on, admin_session):
+    resp = await client.get("/api/docs", cookies=admin_session)
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Same policy as every other page: nonce-based, no inline allowance, no eval,
+    # no CDN. The page works under it because it has no inline script at all.
+    script_src = _script_src(resp.headers["content-security-policy"])
+    assert re.fullmatch(r"script-src 'self' 'nonce-[\w-]+'", script_src), script_src
+    for attrs, inline in SCRIPT_TAG_RE.findall(html):
+        assert "src=" in attrs and not inline.strip(), "inline script on the docs page"
+    assert "cdn.jsdelivr.net" not in html
+
+    assert 'data-openapi-url="/api/openapi.json"' in html
+    srcs = re.findall(r'(?:href|src)="([^"]*/static/[^"]*)"', html)
+    assert "/static/vendor/swagger-ui/swagger-ui-bundle.js" in " ".join(srcs)
+    assert "/static/api_docs.js" in " ".join(srcs)
+    assert all(u.endswith(f"?v={build.BUILD_VERSION}") for u in srcs), srcs
+
+
+async def test_docs_page_under_ingress(client, mock_ha_client, test_db, api_on):
+    with patch.object(app.ingress, "_SUPERVISOR_TOKEN", "fake-supervisor-token"):
+        resp = await client.get("/api/docs", headers={"X-Ingress-Path": INGRESS_PREFIX})
+    assert resp.status_code == 200
+    html = resp.text
+    assert f'data-openapi-url="{INGRESS_PREFIX}/api/openapi.json"' in html
+    srcs = re.findall(r'(?:href|src)="([^"]*/static/[^"]*)"', html)
+    assert srcs and all(u.startswith(f"{INGRESS_PREFIX}/static/") for u in srcs)
+    assert "frame-ancestors 'self'" in resp.headers["content-security-policy"]
+
+
+def test_boot_script_keeps_the_key_out_of_storage_and_skips_the_validator():
+    js = open("static/api_docs.js").read()
+    assert "persistAuthorization: false" in js
+    assert "validatorUrl: null" in js
+
+
+async def test_enabling_the_api_leaves_the_guest_csp_alone(client, mock_ha_client, test_db, sample_token):
+    resp_off = await client.get("/g/test-token")
+    with patch.object(settings, "api_enabled", True), patch.object(settings, "api_token", KEY):
+        resp_on = await client.get("/g/test-token")
+    strip = lambda csp: re.sub(r"'nonce-[\w-]+'", "", csp)  # noqa: E731
+    assert strip(resp_on.headers["content-security-policy"]) == strip(
+        resp_off.headers["content-security-policy"]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard link
+# ---------------------------------------------------------------------------
+
+async def test_dashboard_links_to_docs_only_when_enabled(client, mock_ha_client, test_db, admin_session):
+    resp = await client.get("/admin/dashboard", cookies=admin_session)
+    assert "/api/docs" not in resp.text
+    with patch.object(settings, "api_enabled", True), patch.object(settings, "api_token", KEY):
+        resp = await client.get("/admin/dashboard", cookies=admin_session)
+    assert 'href="/api/docs"' in resp.text
+
+
+async def test_dashboard_docs_link_carries_ingress_prefix(client, mock_ha_client, test_db, api_on):
+    with patch.object(app.ingress, "_SUPERVISOR_TOKEN", "fake-supervisor-token"):
+        resp = await client.get("/admin/dashboard", headers={"X-Ingress-Path": INGRESS_PREFIX})
+    assert f'href="{INGRESS_PREFIX}/api/docs"' in resp.text
 
 
 def test_schema_body_models_do_not_constrain_the_pin():

@@ -1,7 +1,7 @@
-"""Public REST API (/api/v1).
+"""Public REST API (/api/v1) and its Swagger UI (/api/docs).
 
 Everything here is off unless the add-on options api_enabled and api_token are
-set; until then every route answers 404.
+set; until then every route answers 404, the docs included.
 
 The API is a second front door to the admin token actions, not a second
 implementation of them. Handlers call the admin router's own functions — the
@@ -15,19 +15,26 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Security, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import ha_client
 from app.api_auth import (
     API_PRINCIPAL,
     api_enabled,
+    api_key_header,
+    enforce_api_rate_limit,
+    keys_match,
     require_api_key,
 )
+from app.auth import require_admin
+from app.context import base_context
 from app.models import (
     NEVER_EXPIRES_SECONDS,
     ApiTokenCreateRequest,
@@ -45,6 +52,15 @@ router = APIRouter(
     tags=["tokens"],
     dependencies=[Depends(require_api_key)],
 )
+
+# The docs and the schema are for the owner, not the internet. Port 5880 is
+# often the port guest links are served on, reverse-proxied to the outside, and
+# a public Swagger page would hand anyone a map of the admin surface. So the
+# page wants an admin session (or ingress), and the schema accepts either that
+# or the API key, which is how a client generator would fetch it.
+docs_router = APIRouter(prefix="/api", include_in_schema=False)
+
+templates = Jinja2Templates(directory="templates")
 
 # Default validity of a duplicate when the request names none — the same 24
 # hours the dashboard's Duplicate pre-selects.
@@ -279,3 +295,83 @@ async def api_validation_error_handler(request: Request, exc: RequestValidationE
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={"detail": jsonable_encoder(errors)},
     )
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI schema and Swagger UI
+# ---------------------------------------------------------------------------
+
+_schema_cache: dict | None = None
+
+
+def _openapi_schema() -> dict:
+    """The schema for /api/v1 and nothing else.
+
+    Built from this router's routes rather than the app's, so it cannot pick up
+    an admin or guest route by omission — a new admin endpoint would otherwise
+    appear here the day someone forgot include_in_schema=False on it.
+    """
+    global _schema_cache
+    if _schema_cache is None:
+        _schema_cache = get_openapi(
+            title="HomePass API",
+            version="1",
+            description=(
+                "Manage HomePass guest tokens from Home Assistant automations, "
+                "Node-RED or any HTTP client. Authenticate with the `X-API-Key` "
+                "header set to the add-on's API Token."
+            ),
+            routes=router.routes,
+        )
+    return _schema_cache
+
+
+async def _is_admin(request: Request) -> bool:
+    try:
+        await require_admin(request)
+    except HTTPException:
+        return False
+    return True
+
+
+@docs_router.get("/openapi.json")
+async def api_openapi(
+    request: Request,
+    api_key: str | None = Security(api_key_header),
+) -> JSONResponse:
+    if not api_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await enforce_api_rate_limit(request)
+    if not (keys_match(api_key) or await _is_admin(request)):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    schema = dict(_openapi_schema())
+    # Under ingress the browser reaches this app at /api/hassio_ingress/<t>/…,
+    # and Swagger UI resolves operation paths against `servers`. Naming the
+    # prefix here is what makes Try it out land on the add-on instead of on
+    # Home Assistant's own /api. Setting ASGI root_path instead would do the
+    # same for the schema and break every other route's path matching.
+    prefix = request.state.ingress_path
+    if prefix:
+        schema["servers"] = [{"url": prefix}]
+    return JSONResponse(schema)
+
+
+@docs_router.get("/docs")
+async def api_docs(request: Request):
+    """Swagger UI, served under the same CSP as every other page.
+
+    FastAPI's built-in docs page loads Swagger from a CDN and boots it with an
+    inline script, which would need both a CDN allowance and a script
+    exception in the policy. This page loads a pinned Swagger UI from /static
+    (fetched and checksummed at image build time) and boots it from a static
+    file, so the policy needs no change at all — for this page or any other.
+    """
+    if not api_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    base = request.state.ingress_path
+    if not await _is_admin(request):
+        return RedirectResponse(url=f"{base}/admin/dashboard")
+    ctx = base_context(request)
+    ctx["openapi_url"] = f"{base}/api/openapi.json"
+    return templates.TemplateResponse(request, "api_docs.html", ctx)

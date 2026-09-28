@@ -226,7 +226,8 @@ async def replace_schedule(token_id: str, body: TokenScheduleRequest) -> dict:
     A full replacement — an omitted field takes its default, so leaving out
     `access_windows` clears them. Open guest tabs are told to re-check.
     """
-    return await admin.update_token_schedule(token_id, body, _=API_PRINCIPAL)
+    await admin.update_token_schedule(token_id, body, _=API_PRINCIPAL)
+    return await _full_token(token_id)
 
 
 @router.post("/tokens/{token_id}/unbind", response_model=ApiTokenResponse)

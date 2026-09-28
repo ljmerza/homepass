@@ -289,6 +289,9 @@ async def test_api_schedule_replaces_the_timing(client, api_on, mock_ha_client):
     assert body["expires_at"] == expires_at
     assert body["access_windows"] == windows
     assert body["max_uses"] == 2
+    # The same shape GET returns, like every other API write.
+    assert body["entity_ids"] == await db.get_token_entities(token["id"])
+    assert body["entity_meta"] is not None
     mock_ha_client["broadcast_schedule_changed"].assert_awaited_once_with(token["id"])
 
 

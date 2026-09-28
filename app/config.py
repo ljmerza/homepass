@@ -1,3 +1,5 @@
+import ipaddress
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +19,12 @@ class Settings(BaseSettings):
     brand_primary: str = "#D9523C"
     supervisor_token: str = ""
     guest_url: str = ""
+    # Comma-separated CIDRs that count as "the home network", e.g.
+    # "192.168.1.0/24, fd00::/8". Entities marked require_local_network only
+    # accept commands from these ranges; empty turns that gate off. A plain
+    # string rather than list[str] because pydantic-settings would demand JSON
+    # for a list, and the add-on option is typed by a person.
+    local_network_cidrs: str = ""
 
     @model_validator(mode="after")
     def _require_credentials_in_standalone(self):
@@ -25,6 +33,20 @@ class Settings(BaseSettings):
                 raise ValueError("admin_password must be at least 8 characters in standalone mode")
             if not self.admin_username:
                 raise ValueError("admin_username is required in standalone mode")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_local_network_cidrs(self):
+        # Refuse to start on a typo rather than drop the bad entry: a silently
+        # skipped range is a door button that stops working from the one
+        # network it was meant to work from, with nothing in the log to say why.
+        for cidr in (c.strip() for c in self.local_network_cidrs.split(",")):
+            if not cidr:
+                continue
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError:
+                raise ValueError(f"local_network_cidrs: invalid CIDR {cidr!r}")
         return self
 
 

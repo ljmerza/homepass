@@ -30,6 +30,7 @@ installs, just a link.
 - **Optional PIN** — a 4–8 digit PIN on top of the link, enforced on every guest endpoint
 - **Single-device lock** — optionally lock a link to the first browser that claims it; other devices are refused
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
+- **Home-network-only controls** — mark individual entities as commandable only from your home network's IP ranges
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
@@ -116,6 +117,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Background Color** | Hex color for page background | `#F2F0E9` |
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
+| **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g. `192.168.1.0/24`). Empty turns home-network-only controls off | — |
 
 ### Docker Environment Variables
 
@@ -133,6 +135,7 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | `BRAND_BG` | Background color (hex) | No | `#F2F0E9` |
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
+| `LOCAL_NETWORK_CIDRS` | Comma-separated CIDRs that count as the home network | No | — |
 
 ## Home Assistant Activity Events
 
@@ -302,6 +305,32 @@ Two limitations, both real:
 
 It fails closed: no fix, a fix older than two minutes, or a `zone.home` that
 cannot be read all refuse the command.
+
+### Home network only
+
+Per entity, off by default, and only offered once **Home Network Ranges** is
+set. The guest can see the control from anywhere, but a command for it only goes
+through when the request comes from one of those ranges — the house Wi-Fi, for
+instance. Adding a lock, cover, button or input button to a link ticks it
+automatically; untick it for a guest who needs the garage from the road. Other
+entities on the link are unaffected, and an empty option turns every flag off.
+
+It is per entity rather than a fixed rule for those domains, matching the
+proximity requirement: the add-on option says what the home network is, and
+each link says which controls need it — including ones a domain list would miss,
+like an alarm panel's disarm.
+
+The check uses the same client address as the IP allowlist, so the same caveat
+applies: it needs a reverse proxy that overwrites `X-Forwarded-For` with the real
+client address. Two setups need thought:
+
+- **Tunnels and public URLs.** A guest on your Wi-Fi who opens the public link
+  (a Cloudflare Tunnel, Nabu Casa, or hairpin NAT) usually reaches HomePass from
+  your public IP, not a LAN address. Add your public address to the ranges, or
+  have LAN clients resolve the guest hostname to the LAN address.
+- **Being on the network is not being at the door.** Anyone on the Wi-Fi, or on
+  a VPN into it, passes. Combine it with the proximity requirement if that
+  matters.
 
 ### Per-entity display options
 

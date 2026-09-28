@@ -34,6 +34,7 @@ Set these options in the add-on Configuration tab:
 | **Background Color** | Hex color for page background (e.g., `#F2F0E9`) |
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
+| **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
@@ -59,6 +60,7 @@ Click a selected entity to open its options:
 - **Show brightness slider** (lights only) — off by default, so a light is on/off unless you turn this on.
 - **Show colour controls** (lights only) — also off by default. Gives the guest a colour wheel, a warm–cool temperature slider, or both, depending on what the bulb supports.
 - **Require the guest to be at the property** — see below.
+- **Only from the home network** — shown once **Home Network Ranges** is set. See below.
 
 These belong to the link, not the entity. The same light can be on/off for the cleaner and fully adjustable for a house guest.
 
@@ -99,6 +101,14 @@ Any controllable entity can be marked **Require the guest to be at the property*
 - **It fails closed.** No location, a location more than two minutes old, or a `zone.home` that cannot be read all refuse the command.
 
 `zone.home` is the Home zone under **Settings → Areas, labels & zones**. Its radius is what HomePass compares against, so widen it there if guests are being refused at the door.
+
+## Only from the home network
+
+Set **Home Network Ranges** in the add-on options, and any controllable entity can be marked **Only from the home network**. The guest still sees the control and its state wherever they are, but pressing it only works when they are connected to one of those ranges — your Wi-Fi, typically. Locks, covers and buttons are ticked for you when you add them to a link; untick one for a guest you trust to use it from anywhere.
+
+- **It relies on the address your reverse proxy reports**, the same as the IP allowlist.
+- **If guests use a public link at home**, through a tunnel or Nabu Casa, their requests may arrive from your public IP rather than a home address. Add your public IP to the ranges in that case.
+- **Clearing the option turns the check off** for every link, including entities already marked.
 
 ## Cameras
 

@@ -173,12 +173,14 @@ class EntityMetaRequest(BaseModel):
 
     require_proximity is a sibling of `options`, not a member of it: it is an
     access control the command path enforces, and `options` is the blob nothing
-    in that path reads.
+    in that path reads. require_local_network sits beside it for the same
+    reason.
     """
     entity_id: str = Field(..., min_length=1, max_length=255)
     display_name: str | None = Field(default=None, max_length=DISPLAY_NAME_MAX)
     options: dict[str, Any] | None = None
     require_proximity: bool = False
+    require_local_network: bool = False
 
 
 class TokenUpdateExpiryRequest(BaseModel):

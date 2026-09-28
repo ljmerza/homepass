@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import database as db
 from app import ha_client
+from app import local_network
 from app.config import settings
 from app.context import base_context
 from app.ingress import get_ingress_path
@@ -155,6 +156,10 @@ async def admin_dashboard_page(request: Request):
         "never_expires": NEVER_EXPIRES_SECONDS,
         "is_ingress": bool(ctx["base_path"]),
         "guest_url": settings.guest_url,
+        # The "home network only" toggle is offered only when there is a home
+        # network to check against; the ranges are shown beside it so the admin
+        # can see what the flag will actually compare with.
+        "local_networks": [str(n) for n in local_network.networks()],
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 

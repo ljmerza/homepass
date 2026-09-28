@@ -277,6 +277,14 @@
       <p class="text-[11px] text-muted mt-1.5 ml-6.5">The guest link must be served over HTTPS — browsers withhold location on plain HTTP and the control will refuse. The position is self-reported by the browser, so treat this as a deterrent for a casual guest, not proof anyone is really there.</p>
     </div>
 
+    <div id="entity-local-network" class="mt-4 pt-4 border-t border-border-light dark:border-border-dark hidden">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="entity-require-local-network" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">Only from the home network</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">The guest can see this control from anywhere, but pressing it only works from <span id="entity-local-network-ranges" class="font-mono"></span>. Ticked automatically for locks, covers and buttons. It relies on the client address your reverse proxy reports, the same as the IP allowlist.</p>
+    </div>
+
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
       <button data-action="close-modal" data-modal="entity" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
       <button data-action="submit-entity-meta" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Apply</button>
@@ -438,6 +446,10 @@
 const BASE = '{{ base_path }}';
 const IS_INGRESS = {{ 'true' if is_ingress else 'false' }};
 const GUEST_URL = '{{ guest_url }}';
+// The add-on's home-network ranges. Empty means the "only from the home
+// network" gate is off, and the dashboard neither offers nor pre-ticks it.
+const LOCAL_NETWORKS = {{ local_networks | tojson }};
+const LOCAL_NETWORK_CONFIGURED = LOCAL_NETWORKS.length > 0;
 
 function guestLink(slug) {
   if (GUEST_URL) return `${GUEST_URL}/g/${slug}`;
@@ -842,6 +854,21 @@ async function loadTemplates() {
 // toggle is hidden rather than offered and then quietly ignored.
 const PROXIMITY_EXEMPT_DOMAINS = ['sensor', 'binary_sensor', 'camera', 'schedule'];
 
+// Access-type domains — the ones that open something physical. With a home
+// network configured, adding one of these to a link ticks "only from the home
+// network" for it, so the add-on option does what its description says without
+// the admin hunting for the toggle on every lock. It is only a default: untick
+// it per entity to let a trusted guest open the garage from the road.
+const LOCAL_NETWORK_DEFAULT_DOMAINS = ['lock', 'cover', 'button', 'input_button'];
+
+function applyEntityDefaults(pickerState, entityId) {
+  if (!LOCAL_NETWORK_CONFIGURED || pickerState.meta[entityId]) return;
+  if (!LOCAL_NETWORK_DEFAULT_DOMAINS.includes(entityId.split('.')[0])) return;
+  pickerState.meta[entityId] = {
+    display_name: null, options: null, require_proximity: false, require_local_network: true,
+  };
+}
+
 // ── Entity Picker Component ───────────────────────────────────────────
 // Derived from DOMAIN_ORDER so a domain added in domains.js gets a chip
 // automatically - camera was missing because this list was maintained by hand.
@@ -964,6 +991,7 @@ function renderPicker(containerId, pickerState) {
           const showsBrightness = m.options && m.options.show_brightness;
           const showsColor = m.options && m.options.show_color;
           const gated = m.require_proximity;
+          const localOnly = LOCAL_NETWORK_CONFIGURED && m.require_local_network;
           return `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-edit" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="Edit ${esc(renamed || e.friendly_name || e.entity_id)}">
           <div class="w-7 h-7 rounded-full ${DOMAIN_COLORS[e.domain]?.icon || 'bg-gray-500'} flex items-center justify-center flex-shrink-0">
             <span aria-hidden="true" class="material-symbols-outlined text-white text-sm">${PICKER_ICONS[e.domain] || 'devices'}</span>
@@ -975,6 +1003,7 @@ function renderPicker(containerId, pickerState) {
               ${showsBrightness ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Brightness slider shown">brightness_high</span>' : ''}
               ${showsColor ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="Colour controls shown">palette</span>' : ''}
               ${gated ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="Guest must be at the property">location_on</span>' : ''}
+              ${localOnly ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="Only from the home network">wifi_lock</span>' : ''}
             </div>
             <div class="text-[11px] text-muted font-mono truncate">${esc(e.entity_id)}</div>
           </div>
@@ -1040,6 +1069,7 @@ function setPickerSearch(containerId, val) {
 
 function pickerAdd(containerId, entityId) {
   getPickerState(containerId).selected.add(entityId);
+  applyEntityDefaults(getPickerState(containerId), entityId);
   renderPicker(containerId, getPickerState(containerId));
 }
 
@@ -1062,7 +1092,10 @@ function pickerAddAll(containerId) {
   // rendering limit and a bulk add that honoured it would silently miss the
   // rest of a large label.
   const toAdd = pickerFiltered(pickerState).filter(e => !pickerState.selected.has(e.entity_id));
-  toAdd.forEach(e => pickerState.selected.add(e.entity_id));
+  toAdd.forEach(e => {
+    pickerState.selected.add(e.entity_id);
+    applyEntityDefaults(pickerState, e.entity_id);
+  });
   renderPicker(containerId, pickerState);
   if (toAdd.length) showToast(`Added ${toAdd.length} ${toAdd.length === 1 ? 'entity' : 'entities'}`, 'success');
 }
@@ -1081,7 +1114,11 @@ function loadTemplateInto(containerId, templateId) {
     // An entity renamed or removed in HA since the template was saved would
     // otherwise be put on a token that can never render or command it.
     if (!known.has(eid)) { missing++; return; }
-    if (!pickerState.selected.has(eid)) { pickerState.selected.add(eid); added++; }
+    if (!pickerState.selected.has(eid)) {
+      pickerState.selected.add(eid);
+      applyEntityDefaults(pickerState, eid);
+      added++;
+    }
   });
   renderPicker(containerId, pickerState);
 
@@ -1260,6 +1297,11 @@ function openEntityModal(containerId, entityId) {
   document.getElementById('entity-proximity').classList.toggle('hidden', !gateable);
   document.getElementById('entity-require-proximity').checked =
     gateable && Boolean(meta.require_proximity);
+  const localGateable = gateable && LOCAL_NETWORK_CONFIGURED;
+  document.getElementById('entity-local-network').classList.toggle('hidden', !localGateable);
+  document.getElementById('entity-local-network-ranges').textContent = LOCAL_NETWORKS.join(', ');
+  document.getElementById('entity-require-local-network').checked =
+    localGateable && Boolean(meta.require_local_network);
 
   openModal('entity-modal');
   nameInput.focus();
@@ -1288,12 +1330,19 @@ function submitEntityMeta() {
   // column because the command path enforces it, and options is presentation.
   const gateable = !PROXIMITY_EXEMPT_DOMAINS.includes(entityId.split('.')[0]);
   const requireProximity = gateable && document.getElementById('entity-require-proximity').checked;
+  // Carried through untouched when the toggle is not on screen, so a flag set
+  // while a home network was configured is not silently cleared by an edit
+  // made after the option was emptied.
+  const requireLocalNetwork = gateable && (LOCAL_NETWORK_CONFIGURED
+    ? document.getElementById('entity-require-local-network').checked
+    : Boolean((pickerState.meta[entityId] || {}).require_local_network));
 
-  if (name || Object.keys(options).length || requireProximity) {
+  if (name || Object.keys(options).length || requireProximity || requireLocalNetwork) {
     pickerState.meta[entityId] = {
       display_name: name || null,
       options: Object.keys(options).length ? options : null,
       require_proximity: requireProximity,
+      require_local_network: requireLocalNetwork,
     };
   } else {
     delete pickerState.meta[entityId];

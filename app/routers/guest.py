@@ -28,6 +28,7 @@ from app import database as db
 from app import device_binding
 from app import guest_pin
 from app import ha_client
+from app import local_network
 from app import proximity
 from app.build import BUILD_VERSION, STATIC_DIR
 from app.config import settings
@@ -468,6 +469,37 @@ async def _enforce_proximity(row, body: CommandRequest) -> None:
             token_id,
             status.HTTP_403_FORBIDDEN,
             "You need to be at the property to use this",
+        )
+
+
+async def _enforce_local_network(row, body: CommandRequest, request: Request) -> None:
+    """Refuse a home-network-only entity's command from outside the home network.
+
+    Per entity, like the proximity gate beside it, rather than one add-on-wide
+    rule for a fixed list of domains. The add-on option says what the home
+    network is — a fact about the house, set once. Which controls need it is a
+    decision about each guest: the cleaner's front-door lock, not the lamp; the
+    garage for the neighbour watering plants, but not for the house-sitter who
+    may need it opened from the road. A domain list would also miss whatever it
+    did not name, alarm_control_panel's disarm among them.
+
+    Viewing is never gated: the entity's state and the page itself work from
+    anywhere, and only this command path consults the flag.
+
+    Inert while local_network_cidrs is empty, which is what "empty turns the
+    feature off" has to mean for a link flagged before the option was cleared.
+    Not metered like the proximity refusal: the caller already knows its own
+    address, so a refusal tells it nothing, and the command limits apply.
+    """
+    if not local_network.is_configured():
+        return
+    gated = await db.get_local_network_entity_ids(row["id"])
+    if body.entity_id not in gated:
+        return
+    if not local_network.contains(_client_ip(request)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This control only works when you are on the home network",
         )
 
 
@@ -1157,6 +1189,10 @@ async def guest_command(
     # Last of the authorization checks, and before the payload ones, so a
     # malformed colour on a gated entity from off-site still answers "you need
     # to be at the property" rather than confirming the payload was fine.
+    # The network check goes first of the two: it is a comparison against an
+    # address already in hand, and a guest off the network should not be
+    # asked for their location only to be refused for something else.
+    await _enforce_local_network(row, body, request)
     await _enforce_proximity(row, body)
 
     # The colour wheel is the one widget that posts a structured value built

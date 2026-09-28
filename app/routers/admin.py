@@ -285,7 +285,8 @@ def _clean_entity_meta(
     require_proximity is read from the top level of each entry, never from
     `options` — it is stored in its own column because the command path enforces
     it, and letting it arrive inside the presentation blob would blur exactly
-    the line that column exists to keep.
+    the line that column exists to keep. require_local_network is handled the
+    same way for the same reason.
     """
     if not meta:
         return None
@@ -296,11 +297,13 @@ def _clean_entity_meta(
         name = _clean_name(m.get("display_name"))
         opts = _clean_options(m.get("options"))
         gated = bool(m.get("require_proximity"))
-        if name or opts or gated:
+        local_only = bool(m.get("require_local_network"))
+        if name or opts or gated or local_only:
             cleaned[eid] = {
                 "display_name": name,
                 "options": opts,
                 "require_proximity": gated,
+                "require_local_network": local_only,
             }
     return cleaned or None
 
@@ -319,7 +322,8 @@ async def set_entity_meta(
     opts = _clean_options(body.options)
 
     updated = await db.set_entity_meta(
-        token_id, body.entity_id, name, opts, body.require_proximity
+        token_id, body.entity_id, name, opts, body.require_proximity,
+        body.require_local_network,
     )
     if not updated:
         raise HTTPException(
@@ -333,6 +337,7 @@ async def set_entity_meta(
         "display_name": name,
         "options": opts or {},
         "require_proximity": body.require_proximity,
+        "require_local_network": body.require_local_network,
     }
 
 

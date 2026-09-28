@@ -1544,6 +1544,9 @@ function requestLocationFix() {
 async function sendCmd(entityId, domain, service, extraData = {}) {
   const body = { entity_id: entityId, service: `${domain}.${service}`, data: extraData };
   const gated = requiresLocation(entityId);
+  // Home-network-only controls explain their refusal the same way, so a guest
+  // off the Wi-Fi is told why rather than seeing a bare "Command failed".
+  const localOnly = Boolean(entityMeta[entityId]?.require_local_network);
   if (gated) {
     const fix = await requestLocationFix();
     if (!fix) return;  // requestLocationFix has already said why
@@ -1558,7 +1561,7 @@ async function sendCmd(entityId, domain, service, extraData = {}) {
     if (r.status === 410) { showExpired(); return; }
     if (r.status === 401) { showPinEntry(); return; }
     if (await isDeviceRefusal(r)) { reloadForDevice(); return; }
-    if (gated && !r.ok) {
+    if ((gated || localOnly) && !r.ok) {
       // A gated control's refusal carries a reason worth repeating — "you need
       // to be at the property", "your location is out of date". Every other
       // path keeps the generic message so no endpoint's wording leaks into the

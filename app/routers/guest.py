@@ -132,23 +132,39 @@ _CAMERA_ENTITY_RE = re.compile(r"^camera\.[a-z0-9_]+$")
 # L-8: Whitelist of allowed SSE event types
 _ALLOWED_SSE_EVENTS = {
     "state_change", "token_expired", "token_activated", "schedule_changed",
-    "window_closed", "reconnected", "device_unbound",
+    "window_closed", "reconnected", "device_unbound", "access_changed",
 }
 
 # The subset a stream opened outside a token's access — before its start time,
 # or between two of its weekly windows — may forward. No member carries device
 # data: one says the link is now live, one that it is gone, one that the admin
-# changed its timing and the page should ask again, and one that this device no
-# longer holds it. state_change and reconnected are deliberately absent — a
+# changed its timing and the page should ask again, one that this device no
+# longer holds it, and one that the PIN or a link without PIN changed and this
+# device may have been signed out. state_change and reconnected are deliberately absent — a
 # pending guest must not receive real Home Assistant state, and filtering here
 # means the frames are never serialised rather than merely ignored by the page.
-_PENDING_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed", "device_unbound"}
+_PENDING_SSE_EVENTS = {
+    "token_expired", "token_activated", "schedule_changed", "device_unbound", "access_changed",
+}
 
 # Events after which a stream hangs up. Each one means the page is about to
 # reload — into the live page, the countdown or the claim screen — or has
 # nothing left to show, and a stream that stayed open would keep relaying on
 # the terms it was opened under rather than the current ones.
-_TERMINAL_SSE_EVENTS = {"token_expired", "token_activated", "schedule_changed", "device_unbound"}
+_TERMINAL_SSE_EVENTS = {
+    "token_expired", "token_activated", "schedule_changed", "device_unbound", "access_changed",
+}
+
+# How often a long-lived relay — the SSE stream, a live camera view — re-runs
+# the gate it passed at connect. The admin actions that take access away push
+# a terminal event (or, for cameras, nothing: an MJPEG relay has no channel to
+# push on), and this is the backstop behind them: a push dropped on a full
+# queue, a tab that ignores it, a script that never reloads, or a change with
+# no push of its own, such as a camera taken off the link. Every other guest
+# route re-checks per request; without this, these two would keep relaying on
+# the terms they were opened under for as long as the socket stayed up. The
+# check is one token read, so its cost is per stream, not per event.
+STREAM_REVALIDATE_SECONDS = 30
 
 # M-27: Simple TTL cache for HA state list
 _states_cache: list[dict] | None = None
@@ -1240,6 +1256,15 @@ async def guest_state(request: Request, slug: str = Path(max_length=64)):
 # SSE stream
 # ---------------------------------------------------------------------------
 
+async def _still_admitted(slug: str, request: Request, allow_pending: bool) -> bool:
+    """Whether a request that opened a long-lived relay would still be let in."""
+    try:
+        await _validate_token(slug, request, allow_pending=allow_pending)
+    except HTTPException:
+        return False
+    return True
+
+
 async def _event_generator(
     token_id: str, slug: str, request: Request, starts_at: int | None = None,
     closes_at: int | None = None,
@@ -1261,8 +1286,15 @@ async def _event_generator(
     window_closed there and hangs up, so state stops flowing at the boundary
     rather than whenever the tab next asks — every other guest route re-checks
     per request, but this one was checked once, at connect.
+
+    Everything else that can end a device's access is caught by re-running the
+    connect-time gate every STREAM_REVALIDATE_SECONDS: a stream that no longer
+    passes emits access_changed and hangs up, and the page reloads into
+    whatever the server now serves it. A live stream is re-checked as live, so
+    a token that turned pending under it stops relaying state too.
     """
     q = await ha_client.subscribe(token_id)
+    next_check = time.monotonic() + STREAM_REVALIDATE_SECONDS
     try:
         # M-5: Expose WS health in SSE connected event
         yield f"event: connected\ndata: {{\"ws_healthy\": {str(ha_client.is_ws_healthy()).lower()}}}\n\n"
@@ -1284,6 +1316,13 @@ async def _event_generator(
                     yield 'event: window_closed\ndata: {"type": "window_closed"}\n\n'
                     break
                 timeout = min(timeout, remaining)
+
+            if time.monotonic() >= next_check:
+                if not await _still_admitted(slug, request, allow_pending=starts_at is not None):
+                    yield 'event: access_changed\ndata: {"type": "access_changed"}\n\n'
+                    break
+                next_check = time.monotonic() + STREAM_REVALIDATE_SECONDS
+            timeout = max(0.0, min(timeout, next_check - time.monotonic()))
 
             try:
                 event = await asyncio.wait_for(q.get(), timeout=timeout)
@@ -1420,12 +1459,22 @@ async def guest_camera_stream(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Camera unavailable")
 
     async def _relay() -> AsyncIterator[bytes]:
+        # Re-run the camera gate now and then, as the SSE stream does: a live
+        # view is the one relay that outlasting a revocation would matter most
+        # for, and it has no event channel for a push to hang it up on.
+        next_check = time.monotonic() + STREAM_REVALIDATE_SECONDS
         try:
             async for chunk in chunks:
                 if await request.is_disconnected():
                     break
                 if deadline is not None and time.time() >= deadline:
                     break
+                if time.monotonic() >= next_check:
+                    try:
+                        await _validate_camera(slug, entity_id, request)
+                    except HTTPException:
+                        break
+                    next_check = time.monotonic() + STREAM_REVALIDATE_SECONDS
                 yield chunk
         except Exception:
             logger.info("Camera stream ended for %s", entity_id)

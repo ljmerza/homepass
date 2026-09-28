@@ -90,6 +90,7 @@ def mock_ha_client():
         # a window from time.gmtime() without a zone of its own.
         "get_time_zone": AsyncMock(return_value="UTC"),
         "broadcast_device_unbound": AsyncMock(),
+        "broadcast_access_changed": AsyncMock(),
         "invalidate_entity_cache": AsyncMock(),
         "camera_snapshot": AsyncMock(return_value=(b"\xff\xd8fake-jpeg", "image/jpeg")),
         "camera_stream": _fake_camera_stream,

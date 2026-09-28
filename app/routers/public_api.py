@@ -202,8 +202,10 @@ async def update_token(token_id: str, body: ApiTokenUpdateRequest) -> dict:
         await db.update_token_expiry(token_id, expires_at)
     if "pin" in sent:
         # Also ends every guest PIN session for the token, and retires its
-        # links without PIN — see set_token_pin.
+        # links without PIN — see set_token_pin — and, like the dashboard's
+        # PIN change, hangs up the streams those sessions hold open.
         await db.set_token_pin(token_id, pin_hash)
+        await ha_client.broadcast_access_changed(token_id)
     if body.remember_pin is not None:
         await admin.update_token_remember_pin(
             token_id, TokenRememberPinRequest(remember_pin=body.remember_pin), _=API_PRINCIPAL

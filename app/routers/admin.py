@@ -614,6 +614,8 @@ async def update_token_pin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     pin_hash = await _hash_pin_or_none(body.pin)
     await db.set_token_pin(token_id, pin_hash)
+    # The write signs sessions out; this hangs up the streams they opened.
+    await ha_client.broadcast_access_changed(token_id)
     return {"has_pin": pin_hash is not None}
 
 
@@ -633,6 +635,10 @@ async def update_token_remember_pin(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await db.set_token_remember_pin(token_id, body.remember_pin)
+    if not body.remember_pin:
+        # Remembered sessions stop verifying with the write above; their open
+        # streams are hung up here. Turning it on signs nobody out.
+        await ha_client.broadcast_access_changed(token_id)
     return {"remember_pin": body.remember_pin}
 
 
@@ -719,6 +725,7 @@ async def rotate_access_code(
     entry = await db.rotate_access_code(token_id, code_id, guest_pin.hash_access_code(code))
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await ha_client.broadcast_access_changed(token_id)
     return {**entry, "code": code}
 
 
@@ -735,6 +742,9 @@ async def delete_access_code(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     if not await db.delete_access_code(token_id, code_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    # The devices it let in stop passing the PIN gate with the delete; this
+    # hangs up the streams they already hold open.
+    await ha_client.broadcast_access_changed(token_id)
     return {"ok": True}
 
 

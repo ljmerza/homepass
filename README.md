@@ -349,6 +349,13 @@ session it sets names the link, so revoking or rotating a link signs out the
 devices it let in. Changing or clearing the PIN, or rotating the slug, deletes
 every link. Up to 20 per token.
 
+Signing out reaches open connections too. Changing the PIN, turning Remember PIN
+off, or revoking or rotating a link without PIN pushes `access_changed` down the
+link's live streams, which hang up and reload the page — onto the PIN screen for
+a device that was signed out. Behind that push, the SSE stream and live camera
+views re-run their gate every 30 seconds, so a device that no longer passes it
+stops receiving state and frames even if the push never reached it.
+
 ### Single-device lock
 
 Optional and off by default, set when the link is created or later with **Lock

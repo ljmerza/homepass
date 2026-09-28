@@ -491,6 +491,8 @@ function connectPendingSSE() {
   // moment, so let the server decide again.
   pendingEventSource.addEventListener('schedule_changed', activatePending);
   pendingEventSource.addEventListener('device_unbound', reloadForDevice);
+  // The PIN or a link without PIN changed; this device may be signed out.
+  pendingEventSource.addEventListener('access_changed', activatePending);
   pendingEventSource.addEventListener('token_expired', e => {
     pendingEventSource.close();
     pendingEventSource = null;
@@ -542,6 +544,10 @@ function connectSSE() {
   };
   eventSource.addEventListener('window_closed', reloadForSchedule);
   eventSource.addEventListener('schedule_changed', reloadForSchedule);
+  // The PIN or a link without PIN changed, or the server's periodic re-check
+  // found this device no longer let in. The same reload lands it on the PIN
+  // screen if it was signed out, and back on this page if not.
+  eventSource.addEventListener('access_changed', reloadForSchedule);
 
   eventSource.addEventListener('device_unbound', reloadForDevice);
 

@@ -220,6 +220,28 @@ async def broadcast_device_unbound(token_id: str) -> None:
             pass
 
 
+async def broadcast_access_changed(token_id: str) -> None:
+    """Push access_changed to all SSE connections for a token.
+
+    Sent when an admin changes who is let past the PIN: a new or cleared PIN,
+    remember-PIN turned off, or a link without PIN revoked or rotated. Those
+    writes sign sessions out, but a stream is validated once, at connect, so a
+    signed-out device would otherwise keep receiving live state until it
+    happened to reconnect. Every tab on the token gets it, not only the ones
+    signed out — which ones those are is decided by cookies this cannot see —
+    and each reloads into whatever the server now serves it: the PIN screen,
+    or the same page as before.
+    """
+    event = {"type": "access_changed"}
+    async with _sub_lock:
+        queues = set(_subscriptions.get(token_id, set()))
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # REST helpers (M-4: retry on transient HTTP errors)
 # ---------------------------------------------------------------------------

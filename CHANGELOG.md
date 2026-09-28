@@ -9,7 +9,7 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
-## [Unreleased]
+## [1.1.0] - 2026-09-28
 
 ### Added
 
@@ -64,6 +64,13 @@ upstream's; 0.3.0 is the first release from this fork.
 - **Entity suggestions.** "Doors & locks" and "Lights" chips in the create
   picker add likely entities for review; nothing is selected until pressed.
 - **Remember me on the admin login.**
+- **Trusted Proxies option.** Comma-separated CIDRs of reverse proxies allowed
+  to report the visitor's address. Empty trusts Home Assistant's internal
+  network in the add-on, and loopback only standalone. See Security below.
+- **Guest pages in the 24 official EU languages**, picked from the browser, and
+  the admin dashboard in English and Spanish with a per-browser language pin
+  (Settings → Language). Catalogues other than English and Spanish are machine
+  translated and unreviewed — corrections welcome.
 
 ### Changed
 
@@ -74,6 +81,29 @@ upstream's; 0.3.0 is the first release from this fork.
 - **Guest gates run in one documented order:** dead link → IP allowlist →
   country → PIN (or a link without PIN) → device lock → schedule, then
   home network → proximity on commands.
+
+- **Guest cards redesigned** in the Home Assistant Mushroom style: borderless
+  cards with a round icon coloured by what the entity is doing (a locked lock
+  green, an unlocked one red, a colour bulb its own colour), and plain section
+  headings. Every control works as before.
+- **Duplicate from the dashboard keeps per-entity settings**, including the
+  proximity and home-network requirements, so a copy is never looser than its
+  source.
+
+### Security
+
+- **`X-Forwarded-For` is only believed from trusted proxies.** It was taken
+  from any caller, leftmost entry first, so a request could claim any address
+  and pass the IP allowlist, the country allowlist and the home-network check,
+  or dodge the rate limits. The header is now used only when the connection
+  comes from a trusted proxy, read right to left across every header line. If
+  your reverse proxy is not on Home Assistant's internal network or loopback,
+  add it to **Trusted Proxies**, or every guest behind it will appear to come
+  from the proxy (HomePass logs a warning naming the address).
+- **Open streams and camera views now end when a device is signed out.**
+  Changing the PIN, turning Remember PIN off, or revoking a link without PIN
+  used to leave an already-open live view running until it reconnected. Guests
+  are told immediately, and open streams re-check access every 30 seconds.
 
 ### Migrations
 

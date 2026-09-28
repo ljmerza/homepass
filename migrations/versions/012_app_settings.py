@@ -17,16 +17,16 @@ DB_PATH — the database cannot tell the app where the database is.
 
 Values are JSON so an integer survives the round trip as one.
 
-Revision ID: 013
-Revises: 008
+Revision ID: 012
+Revises: 011
 Create Date: 2026-09-28
 """
 from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "013"
-down_revision: Union[str, None] = "008"
+revision: str = "012"
+down_revision: Union[str, None] = "011"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

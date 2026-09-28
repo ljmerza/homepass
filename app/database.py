@@ -308,6 +308,12 @@ async def set_token_pin(token_id: str, pin_hash: str | None) -> None:
     await db.commit()
 
 
+async def update_token_label(token_id: str, label: str) -> None:
+    db = await get_db()
+    await db.execute("UPDATE tokens SET label = ? WHERE id = ?", (label, token_id))
+    await db.commit()
+
+
 async def update_token_expiry(token_id: str, expires_at: int) -> None:
     db = await get_db()
     await db.execute(

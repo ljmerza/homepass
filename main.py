@@ -6,6 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -17,7 +18,7 @@ from app.context import base_context
 from app.ingress import get_ingress_path
 from app.models import NEVER_EXPIRES_SECONDS
 from app.rate_limiter import rate_limiter
-from app.routers import admin, guest
+from app.routers import admin, guest, public_api
 
 logging.basicConfig(
     level=logging.INFO,
@@ -141,6 +142,11 @@ async def security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
+# Always mounted; every route in it answers 404 while the API is disabled.
+# Registering them conditionally at import would tie the decision to whatever
+# the settings said when the module loaded, and leave nothing to test.
+app.include_router(public_api.router)
+app.add_exception_handler(RequestValidationError, public_api.api_validation_error_handler)
 
 
 @app.get("/")

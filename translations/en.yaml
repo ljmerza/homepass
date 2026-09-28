@@ -20,3 +20,9 @@ configuration:
   guest_url:
     name: Guest URL
     description: "External base URL for guest links (e.g., https://guest.myhouse.com). Leave empty for local network."
+  api_enabled:
+    name: Enable API
+    description: "Serve the REST API under /api/v1 for Home Assistant automations, Node-RED and other integrations. Off by default."
+  api_token:
+    name: API Token
+    description: "Key sent in the X-API-Key header. Required when the API is enabled, min 32 characters. Generate one with 'openssl rand -hex 32'."

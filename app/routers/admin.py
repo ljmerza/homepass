@@ -14,6 +14,8 @@ from app.config import settings
 from app import guest_pin
 from app import ha_client
 from app.models import (
+    ACCESS_CODE_LABEL_MAX,
+    AccessCodeCreateRequest,
     AdminLoginRequest,
     DISPLAY_NAME_MAX,
     ENTITY_OPTION_KEYS,
@@ -24,6 +26,7 @@ from app.models import (
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
     TokenPinRequest,
+    TokenRememberPinRequest,
     TokenUpdateEntitiesRequest,
     TokenUpdateExpiryRequest,
 )
@@ -164,6 +167,7 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None,
         # Whether, never what — the PIN is stored as a bcrypt hash and there is
         # no path that returns it or the hash to the dashboard.
         "has_pin": bool(row["pin_hash"]),
+        "remember_pin": bool(row["remember_pin"]),
     }
 
 
@@ -231,6 +235,7 @@ async def create_token(
         entity_meta=_clean_entity_meta(body.entity_meta),
         pin_hash=await _hash_pin_or_none(body.pin),
         starts_at=starts_at,
+        remember_pin=body.remember_pin,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
@@ -395,7 +400,8 @@ async def update_token_pin(
 
     There is no read side. Changing or clearing the PIN also invalidates every
     guest PIN session for the token, because those cookies are signed with a key
-    derived from the hash this writes.
+    derived from the hash this writes — and it retires every PIN-free access
+    link on the token, in the same write (see db.set_token_pin).
     """
     row = await db.get_token_by_id(token_id)
     if not row:
@@ -403,6 +409,127 @@ async def update_token_pin(
     pin_hash = await _hash_pin_or_none(body.pin)
     await db.set_token_pin(token_id, pin_hash)
     return {"has_pin": pin_hash is not None}
+
+
+@router.patch("/tokens/{token_id}/remember-pin")
+async def update_token_remember_pin(
+    token_id: str,
+    body: TokenRememberPinRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Choose whether a correct PIN is remembered on the guest's device.
+
+    Allowed on a token with no PIN: the setting is kept and applies once one is
+    set. Turning it off signs out guests holding a remembered session, so the
+    change means what the admin expects straight away rather than a day later.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await db.set_token_remember_pin(token_id, body.remember_pin)
+    return {"remember_pin": body.remember_pin}
+
+
+# ---------------------------------------------------------------------------
+# PIN-free access links
+# ---------------------------------------------------------------------------
+# A link of the form /g/<slug>?c=<code> that lets a guest past the PIN without
+# typing it. The code is returned exactly once — in the response that minted or
+# rotated it — and stored only as a hash, so the list endpoint reports labels
+# and timestamps, never a usable link.
+
+# Per token. Every "Copy link without PIN" mints a fresh link, and a cap keeps
+# an admin who clicks it habitually from accumulating an unbounded set of live
+# credentials they have forgotten about. Twenty is far past one per device.
+MAX_ACCESS_CODES_PER_TOKEN = 20
+
+
+def _clean_access_code_label(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value.strip()[:ACCESS_CODE_LABEL_MAX] or None
+
+
+async def _token_for_access_codes(token_id: str) -> Any:
+    """The token, refusing one that has nothing for an access link to bypass."""
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if not row["pin_hash"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This token has no PIN — its normal link already opens without one",
+        )
+    if row["revoked"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create access links on a revoked token",
+        )
+    return row
+
+
+@router.get("/tokens/{token_id}/access-codes")
+async def list_access_codes(token_id: str, _: str = Depends(require_admin)) -> list[dict]:
+    if not await db.get_token_by_id(token_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return await db.list_access_codes(token_id)
+
+
+@router.post("/tokens/{token_id}/access-codes", status_code=status.HTTP_201_CREATED)
+async def create_access_code(
+    token_id: str,
+    body: AccessCodeCreateRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Mint a PIN-free link. The response is the only place the code appears."""
+    await _token_for_access_codes(token_id)
+    if await db.count_access_codes(token_id) >= MAX_ACCESS_CODES_PER_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"This token already has {MAX_ACCESS_CODES_PER_TOKEN} links without PIN — "
+                "revoke one first"
+            ),
+        )
+    code = guest_pin.generate_access_code()
+    entry = await db.create_access_code(
+        token_id, guest_pin.hash_access_code(code), _clean_access_code_label(body.label)
+    )
+    return {**entry, "code": code}
+
+
+@router.post("/tokens/{token_id}/access-codes/{code_id}/rotate")
+async def rotate_access_code(
+    token_id: str, code_id: str, _: str = Depends(require_admin)
+) -> dict:
+    """Replace one link with a new one under the same label.
+
+    The old link stops working, and so does every device it had already let in
+    — rotation is for a link that reached the wrong person, and a rotation that
+    left them signed in would not have dealt with that.
+    """
+    await _token_for_access_codes(token_id)
+    code = guest_pin.generate_access_code()
+    entry = await db.rotate_access_code(token_id, code_id, guest_pin.hash_access_code(code))
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {**entry, "code": code}
+
+
+@router.delete("/tokens/{token_id}/access-codes/{code_id}")
+async def delete_access_code(
+    token_id: str, code_id: str, _: str = Depends(require_admin)
+) -> dict:
+    """Revoke one link, signing out the devices it let in.
+
+    Unlike minting, this works whatever state the token is in: taking a
+    credential away must never be refused.
+    """
+    if not await db.get_token_by_id(token_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if not await db.delete_access_code(token_id, code_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
 
 
 @router.post("/tokens/{token_id}/revoke")
@@ -468,11 +595,12 @@ async def rotate_token_slug(token_id: str, _: str = Depends(require_admin)) -> d
     supposed to end it.
 
     Everything except the slug survives — entities and their overrides, expiry,
-    the PIN, and the access log, which is keyed on token id. One thing does not:
+    the PIN, and the access log, which is keyed on token id. Two things do not:
     a guest holding a PIN session for the old link has to enter the PIN again,
     because that cookie is scoped Path=/g/<old-slug> and the browser will never
-    send it to the new one. That is the intended outcome — rotation exists to
-    hand the same access to a different person.
+    send it to the new one; and the token's PIN-free access links are deleted,
+    since each one embeds the old slug. That is the intended outcome — rotation
+    exists to hand the same access to a different person.
     """
     row = await db.get_token_by_id(token_id)
     if not row:

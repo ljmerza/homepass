@@ -143,6 +143,31 @@ class TokenCreateRequest(BaseModel):
     # Field(pattern=...) rejection becomes a 422 whose body echoes the offending
     # `input` back, which for this one field would put the PIN in a response.
     pin: str | None = None
+    # On by default, which is how every token behaved before the setting
+    # existed. Stored even when no PIN is set, so a PIN added later inherits
+    # the choice made here.
+    remember_pin: bool = True
+
+
+class TokenRememberPinRequest(BaseModel):
+    """Whether one correct PIN entry survives the guest closing the browser.
+
+    Its own request rather than a field on TokenPinRequest: that one treats a
+    null PIN as "clear it", so an admin toggling this alone would otherwise
+    have to resend a PIN the server cannot show them.
+    """
+    remember_pin: bool
+
+
+# Access-link labels are admin free text rendered back into the dashboard, so
+# they are capped here and escaped at render, same as TEMPLATE_NAME_MAX.
+ACCESS_CODE_LABEL_MAX = 64
+
+
+class AccessCodeCreateRequest(BaseModel):
+    """Mint a PIN-free access link. The label is optional and only for the admin
+    — "Front door QR", "Sam's phone" — it never reaches the guest."""
+    label: str | None = Field(default=None, max_length=ACCESS_CODE_LABEL_MAX)
 
 
 class TokenPinRequest(BaseModel):

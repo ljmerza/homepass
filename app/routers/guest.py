@@ -108,6 +108,17 @@ PROXIMITY_FAILURE_LIMITS = ((60.0, 5), (3600.0, 30))
 PIN_ATTEMPT_LIMITS_PER_IP = ((60.0, 5), (3600.0, 20))
 PIN_ATTEMPT_LIMITS_PER_TOKEN = ((60.0, 15), (3600.0, 100))
 
+# Budget for redeeming PIN-free access links (?c=<code>), same two-key shape as
+# the PIN budget above and for the same reasons. It is not what keeps a code
+# safe — 192 random bits are beyond guessing at any rate — so it is looser: a
+# household opening one link on every phone and tablet it owns, several times
+# over, never meets it. What it does bound is the work an attacker holding the
+# slug can make each probe cost, and the rows it can make the server read.
+# Kept apart from the PIN budget so a guest who fumbled the keypad a few times
+# can still open the link they were sent.
+ACCESS_CODE_LIMITS_PER_IP = ((60.0, 10), (3600.0, 60))
+ACCESS_CODE_LIMITS_PER_TOKEN = ((60.0, 30), (3600.0, 300))
+
 # entity_id arrives in a URL path here (it does not anywhere else in this app) and
 # is interpolated into the upstream HA request, so it is matched against an exact
 # shape rather than merely checked for membership.
@@ -226,18 +237,33 @@ def _enforce_ip_allowlist(row, request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed")
 
 
-def _pin_gate_ok(row, request: Request) -> bool:
+async def _pin_gate_ok(row, request: Request) -> bool:
     """True if this token carries no PIN, or this request already proved it.
 
     A token with no PIN — the default — never reaches the signature check, so
     nothing about those requests changes.
+
+    A session minted by a PIN-free access link names that link, and passes only
+    while the link still exists. That one row read is what makes revoking or
+    rotating a link sign out the devices it let in, rather than leaving them
+    in until their cookie runs out — a revocation that only stops *new* devices
+    is not the one an admin thinks they performed. Sessions from a typed PIN
+    carry no link and never pay for the read.
     """
     pin_hash = row["pin_hash"]
     if not pin_hash:
         return True
-    return guest_pin.verify_session(
-        request.cookies.get(guest_pin.SESSION_COOKIE), row["id"], pin_hash
+    claims = guest_pin.read_session(
+        request.cookies.get(guest_pin.SESSION_COOKIE),
+        row["id"],
+        pin_hash,
+        remember=bool(row["remember_pin"]),
     )
+    if claims is None:
+        return False
+    if claims.access_code_id is None:
+        return True
+    return await db.access_code_exists(row["id"], claims.access_code_id)
 
 
 def _is_https(request: Request) -> bool:
@@ -256,6 +282,99 @@ def _pin_cookie_path(request: Request, slug: str) -> str:
     enforces the scoping; this just stops the cookie travelling needlessly.
     """
     return f"{request.state.ingress_path}/g/{slug}"
+
+
+def _set_pin_session(
+    response: Response, request: Request, slug: str, row, access_code_id: str | None = None
+) -> None:
+    """Attach a fresh PIN session to `response` — the one cookie both a correct
+    PIN and a PIN-free access link earn, so the two cannot drift apart in how
+    they scope or protect it."""
+    value, max_age = guest_pin.issue_session(
+        row["id"],
+        row["pin_hash"],
+        row["expires_at"],
+        remember=bool(row["remember_pin"]),
+        access_code_id=access_code_id,
+    )
+    response.set_cookie(
+        guest_pin.SESSION_COOKIE,
+        value,
+        httponly=True,
+        # Lax, not strict: guest links are opened from a text message or an
+        # email, and a strict cookie is withheld on that first cross-site
+        # navigation — the guest would be re-prompted every single time. Lax
+        # still withholds it from cross-site POSTs, so a forged command from
+        # another origin fails the gate.
+        samesite="lax",
+        secure=_is_https(request),
+        # None when the token does not remember the PIN: a cookie with no
+        # Max-Age is a browser-session cookie, gone when the browser closes.
+        max_age=max_age,
+        path=_pin_cookie_path(request, slug),
+    )
+
+
+def _pin_page(request: Request, slug: str, error: str | None = None, status_code: int = 200):
+    ctx = base_context(request)
+    ctx.update({"slug": slug, "contact_message": settings.contact_message})
+    if error:
+        ctx["error"] = error
+    return templates.TemplateResponse(request, "pin_entry.html", ctx, status_code=status_code)
+
+
+async def _redeem_access_code(request: Request, row, slug: str, code: str):
+    """Exchange a PIN-free access link for a PIN session, then drop the code.
+
+    Every outcome that lets the guest in is a redirect to the bare /g/<slug>, so
+    the code does not stay in the address bar, the tab's history, or a
+    bookmark the guest makes of the app — and a PWA installed from that page
+    starts from the bare link, not the code. (The Referer is already withheld
+    app-wide by the security-headers middleware.)
+
+    The code is only ever accepted here. /state, /stream, /command and the
+    camera routes accept the session cookie and nothing else, so the code is
+    never a bearer credential for the API, only a one-step way to earn the same
+    cookie a correct PIN earns — and everything behind the gate is unchanged.
+
+    Callers have already refused revoked and expired tokens and applied the IP
+    allowlist: a link without a PIN skips the keypad, not any other gate.
+    """
+    clean = RedirectResponse(
+        url=f"{request.state.ingress_path}/g/{slug}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    # No PIN to skip, or a device already past it: nothing to redeem, and not
+    # worth spending the budget on. The strip still happens.
+    if not row["pin_hash"] or await _pin_gate_ok(row, request):
+        return clean
+
+    ip_ok = await rate_limiter.check_multi(
+        f"code:{row['id']}:{_client_ip(request)}", ACCESS_CODE_LIMITS_PER_IP
+    )
+    if not ip_ok or not await rate_limiter.check_multi(
+        f"code:{row['id']}", ACCESS_CODE_LIMITS_PER_TOKEN
+    ):
+        return _pin_page(
+            request, slug,
+            error="Too many attempts — please wait a minute and try again.",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    code_id = guest_pin.match_access_code(code, await db.get_access_code_hashes(row["id"]))
+    if code_id is None:
+        # Revoked, rotated, retired by a PIN change, or never real — the guest
+        # is told only that the link no longer skips the PIN, and gets the
+        # keypad, which is what they would need in every one of those cases.
+        return _pin_page(
+            request, slug,
+            error="This link no longer skips the PIN. Enter the PIN to continue.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    await db.touch_access_code(code_id)
+    _set_pin_session(clean, request, slug, row, access_code_id=code_id)
+    return clean
 
 
 def _is_pending(row) -> bool:
@@ -324,7 +443,7 @@ async def _validate_token(slug: str, request: Request, allow_pending: bool = Fal
 
     _enforce_ip_allowlist(row, request)
 
-    if not _pin_gate_ok(row, request):
+    if not await _pin_gate_ok(row, request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN required")
 
     if not allow_pending and _is_pending(row):
@@ -538,13 +657,18 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
 
+    # A PIN-free access link. After the IP allowlist, so it skips the keypad
+    # and nothing else; before the PIN gate, so even a device that is already
+    # unlocked has the code stripped from its address bar. Membership, not a
+    # truthy value: a bare `?c=` is still a link that needs cleaning up.
+    if "c" in request.query_params:
+        return await _redeem_access_code(request, row, slug, request.query_params["c"])
+
     # Locked tokens get the PIN screen instead of the app. Nothing is touched or
     # logged yet — an unanswered prompt is not an access, the same way a request
     # blocked by the IP allowlist above is not.
-    if not _pin_gate_ok(row, request):
-        ctx = base_context(request)
-        ctx.update({"slug": slug, "contact_message": settings.contact_message})
-        return templates.TemplateResponse(request, "pin_entry.html", ctx)
+    if not await _pin_gate_ok(row, request):
+        return _pin_page(request, slug)
 
     # A visit before the window opens is not an access: nothing is touched,
     # logged, or reported to HA, the same way an unanswered PIN prompt is not.
@@ -664,25 +788,11 @@ async def guest_pin_submit(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    value, max_age = guest_pin.issue_session(row["id"], pin_hash, row["expires_at"])
     response = RedirectResponse(
         url=f"{request.state.ingress_path}/g/{slug}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
-    response.set_cookie(
-        guest_pin.SESSION_COOKIE,
-        value,
-        httponly=True,
-        # Lax, not strict: guest links are opened from a text message or an
-        # email, and a strict cookie is withheld on that first cross-site
-        # navigation — the guest would be re-prompted every single time. Lax
-        # still withholds it from cross-site POSTs, so a forged command from
-        # another origin fails the gate.
-        samesite="lax",
-        secure=_is_https(request),
-        max_age=max_age,
-        path=_pin_cookie_path(request, slug),
-    )
+    _set_pin_session(response, request, slug, row)
     return response
 
 

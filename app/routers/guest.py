@@ -29,6 +29,7 @@ from app import device_binding
 from app import geoip
 from app import guest_pin
 from app import ha_client
+from app import i18n
 from app import local_network
 from app import proximity
 from app import schedule
@@ -415,11 +416,13 @@ def _set_pin_session(
     )
 
 
-def _pin_page(request: Request, slug: str, error: str | None = None, status_code: int = 200):
-    ctx = base_context(request)
+def _pin_page(request: Request, slug: str, error_key: str | None = None, status_code: int = 200):
+    """The PIN screen, optionally with an error — named by its catalogue key,
+    so it is rendered in the guest's language like the rest of the page."""
+    ctx = base_context(request, i18n.GUEST)
     ctx.update({"slug": slug, "contact_message": settings.contact_message})
-    if error:
-        ctx["error"] = error
+    if error_key:
+        ctx["error_key"] = error_key
     return templates.TemplateResponse(request, "pin_entry.html", ctx, status_code=status_code)
 
 
@@ -459,7 +462,7 @@ async def _redeem_access_code(request: Request, row, slug: str, code: str):
     ):
         return _pin_page(
             request, slug,
-            error="Too many attempts — please wait a minute and try again.",
+            error_key="page.pin.error_rate_limited",
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         )
 
@@ -470,7 +473,7 @@ async def _redeem_access_code(request: Request, row, slug: str, code: str):
         # keypad, which is what they would need in every one of those cases.
         return _pin_page(
             request, slug,
-            error="This link no longer skips the PIN. Enter the PIN to continue.",
+            error_key="page.pin.error_link_retired",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
@@ -850,7 +853,7 @@ async def guest_service_worker():
 async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: str = Path(max_length=64)):
     row = await db.get_token_by_slug(slug)
     if not row or _is_dead(row):
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         # "used" changes the wording and nothing else. It tells whoever holds
         # the slug that the link was used, which is no more than "expired"
         # tells them, and it saves a guest who tapped once from wondering
@@ -866,7 +869,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
         _enforce_ip_allowlist(row, request)
         await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
 
@@ -893,7 +896,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
     # card a chat app builds from it leaks nothing about the home either.
     if row["device_binding"]:
         if not row["device_secret_hash"]:
-            ctx = base_context(request)
+            ctx = base_context(request, i18n.GUEST)
             ctx.update({"slug": slug, "contact_message": settings.contact_message})
             return templates.TemplateResponse(request, "device_claim.html", ctx)
         if not _device_gate_ok(row, request):
@@ -930,7 +933,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
         )
         _schedule_page_load_activity(background_tasks, row)
 
-    ctx = base_context(request)
+    ctx = base_context(request, i18n.GUEST)
     ctx.update({
         "slug": slug,
         "label": row["label"],
@@ -988,7 +991,7 @@ async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: s
 
 
 def _device_refused_page(request: Request, slug: str) -> HTMLResponse:
-    ctx = base_context(request)
+    ctx = base_context(request, i18n.GUEST)
     ctx.update({"slug": slug, "contact_message": settings.contact_message})
     return templates.TemplateResponse(
         request, "device_refused.html", ctx, status_code=status.HTTP_403_FORBIDDEN
@@ -1018,7 +1021,7 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
     # _is_dead, not just revoked/expired: a use-limited link that has spent its
     # last use is as dead as an expired one, and must not be claimable.
     if not row or _is_dead(row):
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
 
@@ -1026,7 +1029,7 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
         _enforce_ip_allowlist(row, request)
         await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
 
@@ -1085,7 +1088,7 @@ async def guest_pin_submit(
     """
     row = await db.get_token_by_slug(slug)
     if not row or _is_dead(row):
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
 
@@ -1093,7 +1096,7 @@ async def guest_pin_submit(
         _enforce_ip_allowlist(row, request)
         await _enforce_country_allowlist(row, request)
     except HTTPException as exc:
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
 
@@ -1115,11 +1118,11 @@ async def guest_pin_submit(
     if not ip_ok or not await rate_limiter.check_multi(
         f"pin:{row['id']}", PIN_ATTEMPT_LIMITS_PER_TOKEN
     ):
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({
             "slug": slug,
             "contact_message": settings.contact_message,
-            "error": "Too many attempts — please wait a minute and try again.",
+            "error_key": "page.pin.error_rate_limited",
         })
         return templates.TemplateResponse(
             request, "pin_entry.html", ctx,
@@ -1127,11 +1130,11 @@ async def guest_pin_submit(
         )
 
     if not guest_pin.is_valid_pin(pin) or not await guest_pin.verify_pin(pin, pin_hash):
-        ctx = base_context(request)
+        ctx = base_context(request, i18n.GUEST)
         ctx.update({
             "slug": slug,
             "contact_message": settings.contact_message,
-            "error": "Incorrect PIN",
+            "error_key": "page.pin.error_incorrect",
         })
         return templates.TemplateResponse(
             request, "pin_entry.html", ctx,
@@ -1160,7 +1163,10 @@ async def guest_manifest(request: Request, slug: str = Path(max_length=64)):
     manifest = {  # colors must match static/input.css
         "name": settings.app_name,
         "short_name": settings.app_name[:12],
-        "description": "Temporary home controls",
+        # In the language of the browser installing the app, like its pages.
+        "description": i18n.translator(i18n.GUEST, i18n.guest_language(request))(
+            "page.manifest_description"
+        ),
         "start_url": f"{bp}/g/{slug}",
         "scope": f"{bp}/g/{slug}",
         "display": "standalone",

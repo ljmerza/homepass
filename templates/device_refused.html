@@ -3,7 +3,7 @@
 {# A device-bound link opened on a device that does not hold it. Deliberately
    not the expired page: the link is fine, and telling the guest otherwise sends
    them — and whoever they ask — looking for a date problem that does not exist. #}
-{% block title %}Link in use — {{ app_name }}{% endblock %}
+{% block title %}{{ t('page.device_refused.page_title') }} — {{ app_name }}{% endblock %}
 
 {% block head_extra %}
 <meta name="robots" content="noindex, nofollow">
@@ -18,10 +18,10 @@
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
       <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">phonelink_lock</span>
     </div>
-    <h1 class="text-2xl font-serif tracking-tight mb-2">Link in use on another device</h1>
-    <p class="text-muted text-base leading-relaxed mb-4">This link only works on the device that opened it first.</p>
-    <p class="text-muted text-sm leading-relaxed">If that was you, open the link there — in the same browser. Links opened from a chat app sometimes land in the app's own built-in browser, which counts as a different device.</p>
-    <p class="text-muted text-sm leading-relaxed mt-4">If not, the person who shared it can reset the device lock.</p>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.device_refused.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed mb-4">{{ t('page.device_refused.body') }}</p>
+    <p class="text-muted text-sm leading-relaxed">{{ t('page.device_refused.same_device') }}</p>
+    <p class="text-muted text-sm leading-relaxed mt-4">{{ t('page.device_refused.reset') }}</p>
     <p class="text-muted text-sm leading-relaxed mt-6">{{ contact_message }}</p>
   </div>
 {% endblock %}

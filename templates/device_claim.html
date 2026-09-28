@@ -19,18 +19,18 @@
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
       <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">smartphone</span>
     </div>
-    <h1 class="text-2xl font-serif tracking-tight mb-2">Use this device?</h1>
-    <p class="text-muted text-base leading-relaxed mb-6">This link works on one device only. Continue on the phone and browser you will use during your stay — once you do, other devices can no longer open it.</p>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">{{ t('page.device_claim.title') }}</h1>
+    <p class="text-muted text-base leading-relaxed mb-6">{{ t('page.device_claim.body') }}</p>
 
     {# A plain form POST, not a script: claiming has to be a deliberate tap, and
        nothing that merely fetches or renders this page submits a form. #}
     <form method="post" action="{{ base_path }}/g/{{ slug }}/bind">
       <button type="submit" class="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors">
-        Use this device
+        {{ t('page.device_claim.button') }}
       </button>
     </form>
 
-    <p class="text-muted text-sm leading-relaxed mt-6">Opened this from a chat app? Some apps show links in a built-in browser, which counts as a separate device. Choose <span class="font-medium">Open in browser</span> first, then continue there.</p>
+    <p class="text-muted text-sm leading-relaxed mt-6">{{ t('page.device_claim.chat_app_html') }}</p>
   </div>
 {% endblock %}
 

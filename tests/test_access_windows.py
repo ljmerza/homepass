@@ -14,6 +14,7 @@ house's time zone, inside its starts_at/expires_at. The properties under test:
 
 Real routing, real DB; only ha_client is mocked (UTC by default).
 """
+import html
 import json
 import time
 from datetime import datetime
@@ -377,7 +378,9 @@ async def test_an_unreadable_zone_fails_closed_with_503(client, inside_token, mo
         assert resp.status_code == 503, f"{method} {suffix}"
     mock_ha_client["call_service"].assert_not_awaited()
     page = await client.get(f"/g/{inside_token['slug']}")
-    assert "check this link's schedule" in page.text
+    # Unescaped: the banner is rendered through the i18n catalogue, and Jinja
+    # writes the apostrophe as &#39; — the same text on screen.
+    assert "check this link's schedule" in html.unescape(page.text)
 
 
 async def test_an_unwindowed_token_never_asks_for_the_zone(client, sample_token, mock_ha_client):

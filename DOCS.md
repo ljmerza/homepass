@@ -19,6 +19,8 @@ For direct port access (e.g., `http://<your-ha-ip>:5880/admin/dashboard`), set *
 3. The guest opens the link on their phone. No app install or HA account needed.
 4. When the token expires, the guest sees the contact message and can no longer control devices.
 
+Without a **Guest URL**, links copied from the HA side panel point at this machine's host name and the add-on's **Network** port, both read from the Supervisor. Remap the port (or rename the host) and new links follow it. If you disable the port, the dashboard warns you, because nothing outside Home Assistant can reach a guest link then.
+
 The slug in the link is the credential: anyone holding the link has the access. Share it the way you would share a password, and use **Revoke** or **Rotate Link** if it ends up somewhere it should not be.
 
 ## Configuration
@@ -41,6 +43,14 @@ Set these options in the add-on Configuration tab:
 
 These are the only add-on options. Everything else is set per link, in the dashboard.
 
+### Changing settings from the dashboard
+
+The **Settings** button (the sliders icon in the dashboard header) edits App Name, Contact Message, Guest URL, both colours and how many days of activity to keep. Changes apply straight away, with no restart.
+
+A value saved there **overrides** the add-on option. The option stays underneath: the dialog shows which fields are overridden and what the option says, and **Revert** puts the option back in charge. While a field is overridden, changing that option in the Configuration tab has no effect. Saving a field back to the same value as its option clears the override.
+
+Admin username and password, and the Home Assistant connection, can only be changed in the add-on configuration. A mistake there could lock you out of the dashboard, and they are not something a browser session should be able to read or change.
+
 ## Choosing entities
 
 The picker lists every entity in a domain HomePass supports: lights, switches, groups, climate, locks, alarm panels, media players, covers, fans, buttons, counters, timers, the `input_*` helpers, time and date helpers, and the read-only sensors, cameras and schedules. Scripts, scenes and automations are deliberately absent, because running one would take a guest outside the entities you picked.
@@ -52,6 +62,8 @@ Three ways to narrow the list, and they combine:
 - **Label** — filter by a Home Assistant label. Once a label or a search has narrowed the list, an **Add all** button appears and takes every match, not just the rows on screen.
 
 If the label row is missing, HomePass could not read the label registry from Home Assistant. Everything else still works.
+
+**Suggest** (new links only) offers two starting points: **Doors & locks** adds every lock, plus covers that Home Assistant classes as a door, gate or garage door and covers or buttons whose name says door, gate or garage. **Lights** adds every light, plus switches named as a light or lamp. Nothing is picked until you press one, pressing one only adds to the selection, and names are matched as whole words, so "Outdoor Blinds" is not a door. Check what was added before you create the link.
 
 **Templates** save the current selection under a name so a later link can start from it. Loading a template adds to whatever is already selected, so two templates can be stacked; entities Home Assistant no longer has are dropped quietly.
 
@@ -160,7 +172,7 @@ Each token's card offers:
 
 **Countries** is also set when the link is created: a comma-separated list of country codes (`GB, IE`). The link then only opens for visitors whose internet address is registered in one of those countries, plus anyone on your **Home Network Ranges**. It is a coarse filter — a VPN or a roaming phone can appear to be somewhere else — and it needs the same reverse proxy the IP allowlist does. The country lookup happens on your own machine, using a database built into the add-on (IP Geolocation by [DB-IP](https://db-ip.com), CC BY 4.0); nothing about your guests is sent anywhere.
 
-**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days.
+**Recent activity** in the dashboard shows link opens and commands. Access logs are kept for 90 days, or as set under **Settings**.
 
 ## Public API
 

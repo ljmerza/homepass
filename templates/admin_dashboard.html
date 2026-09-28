@@ -102,6 +102,9 @@
           API Docs
         </a>
         {% endif %}
+        <button data-action="open-settings-modal" aria-label="Settings" title="Settings" class="w-8 h-8 flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors text-muted">
+          <span aria-hidden="true" class="material-symbols-outlined text-base">tune</span>
+        </button>
         {% if not is_ingress %}
         <button data-action="do-logout" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
           Sign out
@@ -113,6 +116,15 @@
 
   <main class="max-w-4xl mx-auto px-5 py-6">
     <h2 class="sr-only">Guest Tokens</h2>
+    {% if guest_port_unpublished %}
+    <!-- Supervisor says 5880/tcp has no host port, so a direct guest link built
+         here would point at nothing. Said once, up front, rather than on every
+         copy of a link that cannot work. -->
+    <div id="guest-port-warning" role="alert" class="flex items-start gap-2.5 mb-6 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-sm text-amber-700 dark:text-amber-400">
+      <span aria-hidden="true" class="material-symbols-outlined text-lg">link_off</span>
+      <span>The add-on's Network port is disabled, so guest links can't be opened from outside Home Assistant. Enable it under <span class="font-medium">Settings → Add-ons → HomePass → Network</span>, or set a <span class="font-medium">Guest URL</span>.</span>
+    </div>
+    {% endif %}
     <!-- Create Token Button -->
     <button data-action="open-create-modal" class="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors flex items-center justify-center gap-2 mb-6 shadow-lg shadow-primary/20">
       <span aria-hidden="true" class="material-symbols-outlined text-lg">add_circle</span>
@@ -453,6 +465,25 @@
   </div>
 </div>
 
+<!-- Settings Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="settings-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="flex items-center justify-between mb-3">
+      <h2 id="settings-modal-title" class="text-lg font-serif">Settings</h2>
+      <button data-action="close-modal" data-modal="settings" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <p class="text-xs text-muted mb-4">Changes apply straight away, no restart. A value saved here overrides the add-on option until you revert it. Credentials and the Home Assistant connection stay in the add-on configuration.</p>
+    <div id="settings-fields" class="space-y-4"></div>
+    <div id="settings-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="settings" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+      <button data-action="submit-settings" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Modal -->
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="confirm-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl text-center" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
@@ -496,7 +527,12 @@
 <script nonce="{{ csp_nonce }}">
 const BASE = '{{ base_path }}';
 const IS_INGRESS = {{ 'true' if is_ingress else 'false' }};
-const GUEST_URL = '{{ guest_url }}';
+// tojson rather than a quoted interpolation: these are JavaScript literals,
+// and HTML-escaping a value is not the same as making it safe inside one.
+const GUEST_URL = {{ guest_url|tojson }};
+// The add-on's published Network port on the HA host, as Supervisor reports it.
+// Only filled in for the sidebar without a Guest URL, the one case that needs it.
+const DIRECT_GUEST_BASE = {{ direct_guest_base|tojson }};
 // The add-on's home-network ranges. Empty means the "only from the home
 // network" gate is off, and the dashboard neither offers nor pre-ticks it.
 const LOCAL_NETWORKS = {{ local_networks | tojson }};
@@ -504,7 +540,7 @@ const LOCAL_NETWORK_CONFIGURED = LOCAL_NETWORKS.length > 0;
 
 function guestLink(slug) {
   if (GUEST_URL) return `${GUEST_URL}/g/${slug}`;
-  if (IS_INGRESS) return `http://homeassistant.local:5880/g/${slug}`;
+  if (IS_INGRESS) return `${DIRECT_GUEST_BASE || 'http://homeassistant.local:5880'}/g/${slug}`;
   return `${location.origin}/g/${slug}`;
 }
 let allEntities = [];
@@ -1033,6 +1069,18 @@ function renderPicker(containerId, pickerState) {
         </span>`).join('')}
       </div>` : `<p class="text-[11px] text-muted px-1">No saved templates yet. Pick some entities, then Save selection.</p>`}
     </div>
+    ${containerId === 'create-picker' ? `
+    <div class="mb-3">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted px-1 mr-1">Suggest</span>
+        ${SUGGESTIONS.map(sg => `<button type="button" data-action="picker-suggest" data-container="${containerId}" data-category="${sg.category}"
+          title="${esc(sg.title)}"
+          class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-display font-medium border border-dashed border-border-light dark:border-border-dark text-muted hover:border-accent dark:hover:border-accent transition-colors">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">${PICKER_ICONS[sg.icon] || 'devices'}</span>
+          ${esc(sg.label)}
+        </button>`).join('')}
+      </div>
+    </div>` : ''}
     ${labelsAvailable && allLabels.length ? `
     <div class="mb-3">
       <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">Labels</div>
@@ -1180,6 +1228,41 @@ function pickerAddAll(containerId) {
   });
   renderPicker(containerId, pickerState);
   if (toAdd.length) showToast(`Added ${toAdd.length} ${toAdd.length === 1 ? 'entity' : 'entities'}`, 'success');
+}
+
+// ── Suggestions ───────────────────────────────────────────────────────
+// Opt-in starting points for the create picker: nothing is selected until the
+// admin presses a chip, and pressing one only adds to the selection — the same
+// additive rule templates follow, and the token is still only what is saved.
+// The matching lives on the server (/admin/ha/suggested-entities) next to the
+// domain allowlist it must stay inside.
+const SUGGESTIONS = [
+  { category: 'access', label: 'Doors & locks', icon: 'lock',
+    title: 'Add every lock, plus doors, gates and garage doors among covers and buttons' },
+  { category: 'lights', label: 'Lights', icon: 'light',
+    title: 'Add every light, plus switches named as a light or lamp' },
+];
+
+async function suggestInto(containerId, category) {
+  const sg = SUGGESTIONS.find(x => x.category === category);
+  if (!sg) return;
+  const r = await fetch(`${BASE}/admin/ha/suggested-entities?categories=${encodeURIComponent(category)}`);
+  if (!r.ok) { showToast('Failed to load suggestions', 'error'); return; }
+  const suggested = await r.json();
+  const pickerState = getPickerState(containerId);
+  // Only what the picker itself lists, so a suggestion can never put an entity
+  // on a token that the picker would not have offered by hand.
+  const known = new Set(allEntities.map(e => e.entity_id));
+  let added = 0;
+  suggested.forEach(({ entity_id }) => {
+    if (known.has(entity_id) && !pickerState.selected.has(entity_id)) {
+      pickerState.selected.add(entity_id);
+      added++;
+    }
+  });
+  renderPicker(containerId, pickerState);
+  if (added) showToast(`Added ${added} suggested ${added === 1 ? 'entity' : 'entities'} — review before saving`, 'success');
+  else showToast(`No new ${sg.label.toLowerCase()} to suggest`, 'success');
 }
 
 // ── Entity Template Actions ───────────────────────────────────────────
@@ -2127,6 +2210,135 @@ async function confirmDelete(id) {
   });
 }
 
+// ── Settings ──────────────────────────────────────────────────────────
+// The deployment settings that can change while the app runs. The server owns
+// the list (SettingsUpdateRequest) and refuses anything else; this only says
+// how to draw each one. A key the server does not report is not drawn.
+const SETTINGS_FIELDS = [
+  { key: 'app_name', label: 'App name', type: 'text', maxlength: 64,
+    hint: 'Shown to guests on their link and in the installed app.' },
+  { key: 'contact_message', label: 'Contact message', type: 'textarea', maxlength: 500,
+    hint: 'Shown when a guest link has expired or been revoked.' },
+  { key: 'guest_url', label: 'Guest URL', type: 'text', maxlength: 300,
+    placeholder: 'https://guest.myhouse.com',
+    hint: 'External base address for guest links. Leave empty to use the local address.' },
+  { key: 'brand_primary', label: 'Primary colour', type: 'color', hint: 'Buttons and accents.' },
+  { key: 'brand_bg', label: 'Background colour', type: 'color', hint: 'Page background.' },
+  { key: 'access_log_retention_days', label: 'Keep activity for (days)', type: 'number', min: 1, max: 3650,
+    hint: 'Older access-log entries are deleted automatically.' },
+];
+// Rendered into the page by the server, so a change is only visible after a
+// reload. The rest (the contact message, retention) are read per request.
+const SETTINGS_NEED_RELOAD = ['app_name', 'guest_url', 'brand_bg', 'brand_primary'];
+let settingsState = {};
+
+function settingsInputHtml(f, entry) {
+  const id = `set-${f.key}`;
+  const cls = 'w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+  const value = entry.value == null ? '' : String(entry.value);
+  if (f.type === 'textarea') {
+    return `<textarea id="${id}" rows="2" maxlength="${f.maxlength}" class="${cls}">${esc(value)}</textarea>`;
+  }
+  if (f.type === 'color') {
+    return `<input id="${id}" type="color" value="${esc(value.toLowerCase())}" class="w-16 h-10 p-1 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark cursor-pointer">`;
+  }
+  if (f.type === 'number') {
+    return `<input id="${id}" type="number" min="${f.min}" max="${f.max}" step="1" value="${esc(value)}" class="${cls}">`;
+  }
+  return `<input id="${id}" type="text" maxlength="${f.maxlength}" placeholder="${esc(f.placeholder || '')}" value="${esc(value)}" class="${cls}">`;
+}
+
+function renderSettings() {
+  document.getElementById('settings-fields').innerHTML = SETTINGS_FIELDS.map(f => {
+    const entry = settingsState[f.key];
+    if (!entry) return '';
+    const option = entry.option === '' || entry.option == null ? 'empty' : String(entry.option);
+    return `<div>
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <label for="set-${f.key}" class="block text-xs font-mono uppercase tracking-wider text-muted">${esc(f.label)}</label>
+        ${entry.overridden ? `<button type="button" data-action="revert-setting" data-key="${esc(f.key)}"
+          class="inline-flex items-center gap-1 text-[11px] font-display font-medium text-accent hover:underline">
+          <span aria-hidden="true" class="material-symbols-outlined text-sm">undo</span> Revert
+        </button>` : ''}
+      </div>
+      ${settingsInputHtml(f, entry)}
+      <p class="text-[11px] text-muted mt-1">${esc(f.hint)}${entry.overridden
+        ? ` <span class="text-accent">Overriding the add-on option (${esc(option)}).</span>` : ''}</p>
+    </div>`;
+  }).join('');
+}
+
+// Only what actually changed is sent, so a save touches nothing the admin did
+// not edit — and so an untouched field never becomes an override just because
+// the dialog was saved with it on screen.
+function collectSettings() {
+  const out = {};
+  for (const f of SETTINGS_FIELDS) {
+    const entry = settingsState[f.key];
+    const el = document.getElementById(`set-${f.key}`);
+    if (!entry || !el) continue;
+    let value = el.value;
+    if (f.type === 'number') {
+      if (!/^\d+$/.test(value.trim())) throw new Error(`${f.label} must be a whole number.`);
+      value = parseInt(value, 10);
+    } else if (f.type === 'color') {
+      value = value.toUpperCase();
+    } else {
+      value = value.trim();
+    }
+    const current = f.type === 'color' ? String(entry.value).toUpperCase() : entry.value;
+    if (value !== current) out[f.key] = value;
+  }
+  return out;
+}
+
+function settingsErrorText(err) {
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail) && err.detail.length) {
+    return err.detail.map(d => String(d.msg || '').replace(/^Value error, /, '')).join(' ');
+  }
+  return 'Error saving settings.';
+}
+
+async function openSettingsModal() {
+  const r = await fetch(`${BASE}/admin/settings`);
+  if (!r.ok) { showToast('Failed to load settings', 'error'); return; }
+  settingsState = (await r.json()).settings || {};
+  document.getElementById('settings-error').textContent = '';
+  renderSettings();
+  openModal('settings-modal');
+}
+
+function closeSettingsModal() { closeModal('settings-modal'); }
+
+async function submitSettings() {
+  const errEl = document.getElementById('settings-error');
+  errEl.textContent = '';
+  let changes;
+  try { changes = collectSettings(); } catch (e) { errEl.textContent = e.message; return; }
+  const keys = Object.keys(changes);
+  if (!keys.length) { closeSettingsModal(); return; }
+  const r = await fetch(`${BASE}/admin/settings`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(changes),
+  });
+  if (!r.ok) { errEl.textContent = settingsErrorText(await r.json().catch(() => ({}))); return; }
+  settingsState = (await r.json()).settings || {};
+  if (keys.some(k => SETTINGS_NEED_RELOAD.includes(k))) { location.reload(); return; }
+  closeSettingsModal();
+  showToast('Settings saved', 'success');
+}
+
+async function revertSetting(key) {
+  const r = await fetch(`${BASE}/admin/settings/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  if (!r.ok) { showToast('Failed to revert setting', 'error'); return; }
+  settingsState = (await r.json()).settings || {};
+  if (SETTINGS_NEED_RELOAD.includes(key)) { location.reload(); return; }
+  renderSettings();
+  showToast('Reverted to the add-on option', 'success');
+}
+
 // ── Modal Helpers ─────────────────────────────────────────────────────
 function openModal(id) {
   const el = document.getElementById(id);
@@ -2307,6 +2519,7 @@ document.addEventListener('keydown', e => {
       'edit-modal': closeEditModal,
       'pin-modal': closePinModal,
       'schedule-modal': closeScheduleModal,
+      'settings-modal': closeSettingsModal,
       'create-modal': closeCreateModal,
     };
     for (const [id, closer] of Object.entries(closers)) {
@@ -2401,7 +2614,7 @@ document.addEventListener('click', e => {
 
     // Close any modal
     case 'close-modal': {
-      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal, schedule: closeScheduleModal };
+      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal, entity: closeEntityModal, pin: closePinModal, template: closeTemplateModal, schedule: closeScheduleModal, settings: closeSettingsModal };
       const closer = modalMap[el.dataset.modal];
       if (closer) closer();
       break;
@@ -2425,6 +2638,7 @@ document.addEventListener('click', e => {
     case 'picker-filter': setPickerFilter(el.dataset.container, el.dataset.domain); break;
     case 'picker-label': setPickerLabel(el.dataset.container, el.dataset.label); break;
     case 'picker-add-all': pickerAddAll(el.dataset.container); break;
+    case 'picker-suggest': suggestInto(el.dataset.container, el.dataset.category); break;
 
     // Entity templates
     case 'template-load': loadTemplateInto(el.dataset.container, el.dataset.template); break;
@@ -2433,6 +2647,11 @@ document.addEventListener('click', e => {
     case 'template-delete': confirmDeleteTemplate(el.dataset.template, el.dataset.name); break;
     case 'open-template-modal': openTemplateModal(el.dataset.container); break;
     case 'submit-template': submitTemplate(); break;
+
+    // Settings
+    case 'open-settings-modal': openSettingsModal(); break;
+    case 'submit-settings': submitSettings(); break;
+    case 'revert-setting': revertSetting(el.dataset.key); break;
   }
 });
 

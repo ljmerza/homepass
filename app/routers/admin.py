@@ -2,8 +2,10 @@
 import asyncio
 import ipaddress
 import json
+import re
 import secrets
 import time
+import unicodedata
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -15,15 +17,23 @@ from app import geoip
 from app import guest_pin
 from app import ha_client
 from app import schedule
+from app import settings_store
 from app.models import (
     ACCESS_CODE_LABEL_MAX,
+    ACCESS_COVER_DEVICE_CLASSES,
+    ACCESS_KEYWORD_DOMAINS,
+    ACCESS_KEYWORDS,
     AccessCodeCreateRequest,
     AdminLoginRequest,
     DISPLAY_NAME_MAX,
     ENTITY_OPTION_KEYS,
     EntityMetaRequest,
     EntityTemplateCreateRequest,
+    LIGHT_KEYWORD_DOMAINS,
+    LIGHT_KEYWORDS,
     NEVER_EXPIRES_SECONDS,
+    SettingsUpdateRequest,
+    SUGGESTION_CATEGORIES,
     SUPPORTED_DOMAINS,
     TEMPLATE_NAME_MAX,
     TokenCreateRequest,
@@ -931,6 +941,40 @@ async def delete_entity_template(template_id: str, _: str = Depends(require_admi
 
 
 # ---------------------------------------------------------------------------
+# Runtime settings
+# ---------------------------------------------------------------------------
+# The deployment settings that are safe to change while the app runs. Which
+# ones, and why the rest stay add-on options, is in app/settings_store.py.
+# Same CSRF footing as every other admin write: the SameSite=strict session
+# cookie, and a JSON body a cross-site form cannot produce.
+
+@router.get("/settings")
+async def read_settings(_: str = Depends(require_admin)) -> dict:
+    return {"settings": settings_store.snapshot()}
+
+
+@router.patch("/settings")
+async def update_settings(
+    body: SettingsUpdateRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No changes")
+    await settings_store.apply(changes)
+    return {"settings": settings_store.snapshot()}
+
+
+@router.delete("/settings/{key}")
+async def revert_setting(key: str, _: str = Depends(require_admin)) -> dict:
+    """Drop one override so the add-on option applies again."""
+    if key not in settings_store.EDITABLE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not an editable setting")
+    await settings_store.revert(key)
+    return {"settings": settings_store.snapshot()}
+
+
+# ---------------------------------------------------------------------------
 # HA entity list proxy
 # ---------------------------------------------------------------------------
 
@@ -991,3 +1035,75 @@ async def ha_entities(
         "labels": (registry or {}).get("labels", []),
         "labels_available": registry is not None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Entity suggestions for the create-token picker
+# ---------------------------------------------------------------------------
+
+_WORD_SPLIT = re.compile(r"[^a-z0-9]+")
+
+
+def _words(*texts: str) -> set[str]:
+    """Lower-case, accent-free whole words. "Lámpara salón" -> {lampara, salon}.
+
+    Accents are folded before splitting, or "lámpara" would break at the á into
+    "l" and "mpara" and match nothing.
+    """
+    folded = unicodedata.normalize("NFKD", " ".join(texts))
+    folded = "".join(c for c in folded if not unicodedata.combining(c)).lower()
+    return {w for w in _WORD_SPLIT.split(folded) if w}
+
+
+def _suggestion_categories(state: dict[str, Any]) -> list[str]:
+    """Which suggestion categories one HA state belongs to, in category order."""
+    entity_id = state["entity_id"]
+    domain, _, object_id = entity_id.partition(".")
+    if domain not in SUPPORTED_DOMAINS:
+        return []
+    attrs = state.get("attributes") or {}
+    name = attrs.get("friendly_name")
+    words = _words(object_id, name if isinstance(name, str) else "")
+
+    found = []
+    if (
+        domain == "lock"
+        or (domain == "cover" and attrs.get("device_class") in ACCESS_COVER_DEVICE_CLASSES)
+        or (domain in ACCESS_KEYWORD_DOMAINS and words & ACCESS_KEYWORDS)
+    ):
+        found.append("access")
+    if domain == "light" or (domain in LIGHT_KEYWORD_DOMAINS and words & LIGHT_KEYWORDS):
+        found.append("lights")
+    return found
+
+
+@router.get("/ha/suggested-entities")
+async def suggested_entities(
+    categories: str = Query(default=",".join(SUGGESTION_CATEGORIES), max_length=64),
+    _: str = Depends(require_admin),
+) -> list[dict]:
+    """Entities the picker's Suggest chips offer, tagged with their category.
+
+    Read-only and advisory: the picker adds these to its selection, and nothing
+    reaches a token until the admin saves it. The two categories draw on
+    disjoint domains, so a name alone never makes a light an access device —
+    "Garage Door Light" is a light.
+    """
+    wanted = [c.strip() for c in categories.split(",") if c.strip()]
+    unknown = sorted(set(wanted) - set(SUGGESTION_CATEGORIES))
+    if not wanted or unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"categories must be drawn from: {', '.join(SUGGESTION_CATEGORIES)}",
+        )
+    try:
+        states = await ha_client.get_states()
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Home Assistant unreachable")
+
+    return [
+        {"entity_id": s["entity_id"], "category": category}
+        for s in states
+        for category in _suggestion_categories(s)
+        if category in wanted
+    ]

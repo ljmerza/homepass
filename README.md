@@ -37,11 +37,13 @@ installs, just a link.
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
+- **Entity suggestions** — opt-in "Doors & locks" and "Lights" chips that pre-fill a new link's selection for review
 - **Slug rotation** — mint a new link for an existing token and retire the old one
 - **Real-time updates** — SSE-powered live state changes with automatic reconnect
 - **Installable PWA** — guests can add it to their home screen for an app-like experience
 - **Dark mode** — system-aware with manual override
 - **Admin dashboard** — create, revoke, extend, and monitor tokens
+- **Live settings** — change the app name, contact message, Guest URL, colours and log retention from the dashboard, no restart
 - **Recent activity** — see guest link opens and commands in the admin dashboard
 - **Service allowlist** — only the services a domain's guest controls actually call are permitted
 - **Rate limiting** — 300 requests/minute and 3000 requests/hour per token on commands
@@ -66,7 +68,9 @@ installs, just a link.
 
 Admin access works through the HA sidebar — no separate login needed. Guest
 links use the direct port (`http://<your-ha-ip>:5880/g/{slug}`) so visitors
-don't need HA accounts.
+don't need HA accounts. Without a Guest URL, the sidebar builds those links from
+the host name and Network port the Supervisor reports, so a remapped port is
+followed automatically.
 
 ### Docker Compose
 
@@ -126,6 +130,22 @@ Set these in **Settings → Add-ons → HomePass → Configuration**:
 | **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g. `192.168.1.0/24`). Empty turns home-network-only controls off | — |
 | **Enable API** | Serve the REST API under `/api/v1` | `false` |
 | **API Token** | `X-API-Key` value for the API (min 32 chars, required when enabled) | — |
+
+### Settings in the dashboard
+
+App name, contact message, Guest URL, both colours and access-log retention
+can also be changed live from the dashboard's **Settings** dialog. Precedence,
+highest first:
+
+1. A value saved in the dashboard (stored in the SQLite database)
+2. The add-on option, or the environment variable in Docker
+3. The built-in default
+
+**Revert** removes the dashboard value so the option applies again. Nothing is
+copied into the database on upgrade, so an install that never opens the dialog
+behaves exactly as before. Credentials and connection settings (`ADMIN_*`,
+`HA_BASE_URL`, `HA_TOKEN`, `DB_PATH`, `PORT`) can only be set as options or
+environment variables.
 
 ### Docker Environment Variables
 

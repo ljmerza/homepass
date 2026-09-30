@@ -9,7 +9,7 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
-## [Unreleased]
+## [1.1.1] - 2026-09-30
 
 ### Fixed
 

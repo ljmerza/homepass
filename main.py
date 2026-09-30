@@ -140,10 +140,10 @@ async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
     ingress_path = get_ingress_path(request)
-    # request.state.ingress_path is the URL base used by templates and guest
+    # request.state.base_path is the URL base used by templates and guest
     # routes for assets, API calls, redirects, cookie paths, and the manifest.
     # Use the Ingress path if present, or the matching guest host's public path.
-    request.state.ingress_path = ingress_path or get_guest_url_path(request)
+    request.state.base_path = ingress_path or get_guest_url_path(request)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -188,7 +188,7 @@ app.add_exception_handler(RequestValidationError, public_api.api_validation_erro
 
 @app.get("/")
 async def root(request: Request):
-    return RedirectResponse(url=f"{request.state.ingress_path}/admin/dashboard")
+    return RedirectResponse(url=f"{request.state.base_path}/admin/dashboard")
 
 
 @app.get("/admin/dashboard", include_in_schema=False)

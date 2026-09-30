@@ -405,7 +405,7 @@ def _pin_cookie_path(request: Request, slug: str) -> str:
     is not sent for /g/abcdef. The HMAC binding in guest_pin is what actually
     enforces the scoping; this just stops the cookie travelling needlessly.
     """
-    return f"{request.state.ingress_path}/g/{slug}"
+    return f"{request.state.base_path}/g/{slug}"
 
 
 def _set_pin_session(
@@ -469,7 +469,7 @@ async def _redeem_access_code(request: Request, row, slug: str, code: str):
     page this redirects to, and on every route after it.
     """
     clean = RedirectResponse(
-        url=f"{request.state.ingress_path}/g/{slug}",
+        url=f"{request.state.base_path}/g/{slug}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
     # No PIN to skip, or a device already past it: nothing to redeem, and not
@@ -1057,7 +1057,7 @@ async def guest_bind(request: Request, slug: str = Path(max_length=64)):
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
 
     back_to_page = RedirectResponse(
-        url=f"{request.state.ingress_path}/g/{slug}",
+        url=f"{request.state.base_path}/g/{slug}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -1129,7 +1129,7 @@ async def guest_pin_submit(
         # on a bookmarked PIN page still lands on the app after an admin clears
         # the PIN. That the token has none is already plain from GET /g/<slug>.
         return RedirectResponse(
-            url=f"{request.state.ingress_path}/g/{slug}",
+            url=f"{request.state.base_path}/g/{slug}",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
@@ -1165,7 +1165,7 @@ async def guest_pin_submit(
         )
 
     response = RedirectResponse(
-        url=f"{request.state.ingress_path}/g/{slug}",
+        url=f"{request.state.base_path}/g/{slug}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
     _set_pin_session(response, request, slug, row)
@@ -1178,7 +1178,7 @@ async def guest_pin_submit(
 
 @router.get("/{slug}/manifest.json")
 async def guest_manifest(request: Request, slug: str = Path(max_length=64)):
-    bp = request.state.ingress_path
+    bp = request.state.base_path
     # Same ?v= stamp the templates put on their asset tags. An installed PWA
     # re-reads the manifest and its icons rarely, so an unversioned icon URL is
     # the longest-lived stale asset of the lot.

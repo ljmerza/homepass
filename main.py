@@ -4,6 +4,7 @@ import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -123,12 +124,26 @@ app = FastAPI(
 _templates = Jinja2Templates(directory="templates")
 
 
+def get_guest_url_path(request: Request) -> str:
+    """Return the public prefix for the configured guest host, or no prefix."""
+    if not settings.guest_url:
+        return ""
+    guest_url = urlsplit(settings.guest_url)
+    # A direct-port visit on another host must keep its root-based URLs.
+    if request.url.netloc.lower() != guest_url.netloc.lower():
+        return ""
+    return guest_url.path.rstrip("/")
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
     ingress_path = get_ingress_path(request)
-    request.state.ingress_path = ingress_path
+    # request.state.ingress_path is the URL base used by templates and guest
+    # routes for assets, API calls, redirects, cookie paths, and the manifest.
+    # Use the Ingress path if present, or the matching guest host's public path.
+    request.state.ingress_path = ingress_path or get_guest_url_path(request)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -179,7 +194,7 @@ async def root(request: Request):
 @app.get("/admin/dashboard", include_in_schema=False)
 async def admin_dashboard_page(request: Request):
     ctx = base_context(request, i18n.ADMIN)
-    is_ingress = bool(ctx["base_path"])
+    is_ingress = bool(get_ingress_path(request))
     # Only the sidebar needs the Supervisor lookup: there the admin is on HA's
     # origin and guest links have to point at the add-on's published port.
     # Direct-port admins link to their own origin, and a Guest URL beats both.

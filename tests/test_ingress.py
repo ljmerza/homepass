@@ -34,6 +34,14 @@ async def test_ingress_bypass_grants_admin_access(client, mock_ha_client, test_d
     assert resp.status_code == 200
 
 
+async def test_guest_url_prefix_does_not_grant_ingress_access(client, mock_ha_client, test_db):
+    from app.config import settings
+
+    with patch.object(settings, "guest_url", "https://guest.example.com/visitors"):
+        resp = await client.get("/admin/tokens", headers={"Host": "guest.example.com"})
+    assert resp.status_code == 401
+
+
 async def test_login_returns_403_when_no_password(client, mock_ha_client, test_db):
     """In add-on mode (empty password), login endpoint returns 403."""
     from app.config import settings

@@ -37,7 +37,7 @@ Set these options in the add-on Configuration tab:
 | **Contact Message** | Message shown when a guest link expires |
 | **Background Color** | Hex color for page background (e.g., `#F2F0E9`) |
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
-| **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
+| **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com` or `https://guest.myhouse.com/visitors`). Leave empty for local network. For a path prefix, the reverse proxy must preserve the public `Host` and strip the prefix before forwarding to HomePass. |
 | **Time Zone** | IANA time zone weekly access windows are evaluated in (e.g., `Europe/Madrid`). Leave empty to use Home Assistant's own time zone, which is right for almost every install. |
 | **Home Network Ranges** | Comma-separated CIDRs that count as your home network (e.g., `192.168.1.0/24`). Controls marked **Only from the home network** accept commands only from these. Leave empty to turn that off. |
 | **Trusted Proxies** | Comma-separated CIDRs of reverse proxies allowed to report the visitor's address in `X-Forwarded-For`. Leave empty to trust Home Assistant's internal network (`172.30.32.0/23`), which covers ingress and proxy add-ons such as NGINX Proxy Manager or Cloudflared. Set it if your proxy runs elsewhere (e.g., `192.168.1.10/32`). The IP and country allowlists, the home-network check and rate limits all use this address; a proxy that isn't trusted makes every guest look like the proxy, and HomePass logs a warning naming it. |

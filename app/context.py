@@ -11,7 +11,7 @@ from app.theme import brand_theme
 
 
 def base_context(request: Request, audience: str | None = None) -> dict:
-    """Common template context: theme, CSP nonce, ingress base path.
+    """Common template context: theme, CSP nonce, URL base path.
 
     ``build_version`` is here rather than in each route because every
     template emits static asset URLs and a page that missed it would keep
@@ -31,7 +31,7 @@ def base_context(request: Request, audience: str | None = None) -> dict:
         "brand_primary": settings.brand_primary,
         "brand_css": brand_css,
         "csp_nonce": request.state.csp_nonce,
-        "base_path": request.state.ingress_path,
+        "base_path": request.state.base_path,
         "build_version": BUILD_VERSION,
     }
     if audience is not None:

@@ -9,11 +9,13 @@ Only ha_client is mocked — it's an external dependency we can't run in CI.
 """
 import logging
 import time
+from unittest.mock import patch
 
 import httpx
 import pytest
 
 from app import database as db
+from app.config import settings
 from app.models import ALLOWED_SERVICES, FORBIDDEN_DATA_KEYS, READ_ONLY_DOMAINS
 
 
@@ -772,6 +774,22 @@ async def test_guest_pwa_valid_token_renders_page(client, sample_token, mock_ha_
         "name": "HomePass",
         "message": "Test Token opened guest link",
     })
+
+
+async def test_guest_pwa_uses_guest_url_prefix(client, sample_token, mock_ha_client):
+    with patch.object(settings, "guest_url", "https://guest.example.com/visitors"):
+        resp = await client.get(f"/g/{sample_token['slug']}", headers={"Host": "guest.example.com"})
+    assert resp.status_code == 200
+    assert 'const BASE = "/visitors";' in resp.text
+    assert 'src="/visitors/static/util.js' in resp.text
+    assert f'href="/visitors/g/{sample_token["slug"]}/manifest.json"' in resp.text
+
+
+async def test_guest_url_prefix_does_not_apply_on_other_hosts(client, sample_token, mock_ha_client):
+    with patch.object(settings, "guest_url", "https://guest.example.com/visitors"):
+        resp = await client.get(f"/g/{sample_token['slug']}")
+    assert resp.status_code == 200
+    assert 'const BASE = "";' in resp.text
 
 
 async def test_guest_pwa_page_load_activity_is_debounced(client, sample_token, mock_ha_client):

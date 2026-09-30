@@ -459,7 +459,7 @@ async def api_openapi(
     # prefix here is what makes Try it out land on the add-on instead of on
     # Home Assistant's own /api. Setting ASGI root_path instead would do the
     # same for the schema and break every other route's path matching.
-    prefix = request.state.ingress_path
+    prefix = request.state.base_path
     if prefix:
         schema["servers"] = [{"url": prefix}]
     return JSONResponse(schema)
@@ -477,7 +477,7 @@ async def api_docs(request: Request):
     """
     if not api_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    base = request.state.ingress_path
+    base = request.state.base_path
     if not await _is_admin(request):
         return RedirectResponse(url=f"{base}/admin/dashboard")
     ctx = base_context(request)

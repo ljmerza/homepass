@@ -9,6 +9,14 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
+## [Unreleased]
+
+### Fixed
+
+- **Guest URLs with a path prefix.** When the configured Guest URL includes a
+  path prefix, guest pages now use it for assets, API calls, redirects, cookies
+  and the PWA manifest without treating those visits as Home Assistant Ingress.
+
 ## [1.1.0] - 2026-09-28
 
 ### Added

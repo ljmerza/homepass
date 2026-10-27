@@ -133,7 +133,7 @@ async def create_token(
              windows_json, max_uses, int(bool(remember_pin)), int(bool(device_binding)),
              country_json, int(bool(show_remaining_uses)), info_text,
              int(bool(info_text_in_footer)), json.dumps(group_headings or {}),
-             json.dumps(branding or {}, separators=(",", ":"), ensure_ascii=False)),
+             _dump_branding(branding or {})),
         )
         if entity_ids:
             meta = entity_meta or {}

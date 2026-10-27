@@ -1321,14 +1321,7 @@ async def guest_logo(request: Request, slug: str = Path(max_length=64)):
     return Response(
         content=bytes(logo["data"]),
         media_type=logo["content_type"],
-        headers={
-            # The bytes were checked as PNG or WebP at upload; this keeps a
-            # browser from reading them as anything else, and from running
-            # them if it ever did.
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "default-src 'none'; sandbox",
-            "Cache-Control": "private, max-age=31536000, immutable",
-        },
+        headers=branding.LOGO_RESPONSE_HEADERS,
     )
 
 

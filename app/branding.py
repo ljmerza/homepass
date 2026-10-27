@@ -46,6 +46,14 @@ LOGO_MAX_BYTES = 512 * 1024
 LOGO_UPLOAD_SLACK = 16 * 1024
 LOGO_MIN_SIDE = 32
 LOGO_MAX_SIDE = 1024
+# Sent with the logo by the admin and guest routes. The bytes were checked as
+# PNG or WebP at upload; this keeps a browser from reading them as anything
+# else, and from running them if it ever did.
+LOGO_RESPONSE_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+    "Cache-Control": "private, max-age=31536000, immutable",
+}
 
 # One list of the color settings lives in app/theme.py.
 COLOR_KEYS = theme.COLOR_KEYS
@@ -139,12 +147,8 @@ def from_row(raw) -> dict:
             return ""
         return cleaned[:limit]
 
-    height = value.get("logo_height", LOGO_HEIGHT_DEFAULT)
-    if isinstance(height, bool) or not isinstance(height, int):
-        height = LOGO_HEIGHT_DEFAULT
-    else:
-        # An older, taller setting is held to the new limit, not thrown away.
-        height = max(LOGO_HEIGHT_MIN, min(LOGO_HEIGHT_MAX, height))
+    # An older, taller setting is held to the new limit, not thrown away.
+    height = _size(value.get("logo_height"), LOGO_HEIGHT_MIN, LOGO_HEIGHT_MAX, LOGO_HEIGHT_DEFAULT)
     title_size = _size(value.get("title_size"), TITLE_SIZE_MIN, TITLE_SIZE_MAX, TITLE_SIZE_DEFAULT)
     eyebrow_size = _size(value.get("eyebrow_size"), EYEBROW_SIZE_MIN, EYEBROW_SIZE_MAX, EYEBROW_SIZE_DEFAULT)
     try:

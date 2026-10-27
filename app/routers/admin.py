@@ -598,11 +598,7 @@ async def get_token_logo_image(token_id: str, _: str = Depends(require_admin)) -
     return Response(
         content=bytes(logo["data"]),
         media_type=logo["content_type"],
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "default-src 'none'; sandbox",
-            "Cache-Control": "private, max-age=31536000, immutable",
-        },
+        headers=branding.LOGO_RESPONSE_HEADERS,
     )
 
 
@@ -1230,9 +1226,9 @@ async def preview_theme(
     colours, which is what the Settings dialog wants.
     """
     values = {name: getattr(settings, name) for name in THEME_FIELDS}
-    values.update({k: (v or "").upper() for k, v in body.model_dump(exclude_unset=True).items() if v is not None})
+    sent = {k: (v or "").upper() for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    values.update(sent)
     if link:
-        sent = {k: (v or "").upper() for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
         own = {k: sent.get(k, values[k] if k in branding.REQUIRED_COLOR_KEYS else "") for k in branding.COLOR_KEYS}
         values = branding.effective_colors(own)
     return theme.preview(brand_from_settings(SimpleNamespace(**values)))

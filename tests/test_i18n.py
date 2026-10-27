@@ -415,6 +415,7 @@ async def test_dashboard_spells_color_for_the_reader(client, admin_session, mock
     assert _embedded_catalogue(ca.text)["strings"]["settings.brand_primary"] == "Primary colour"
     assert "Use global colors" in us.text or "Use global color" in us.text
     assert "colour" not in _embedded_catalogue(us.text)["strings"]["branding.use_global"]
+    assert "colour" not in _embedded_catalogue(us.text)["strings"]["settings.brand_bg"]
 
 
 async def test_pinned_language_beats_the_browser(client, admin_session, mock_ha_client):

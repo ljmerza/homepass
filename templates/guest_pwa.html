@@ -458,6 +458,30 @@ applyStoredInfoState();
   </div>
 </div>
 
+<!-- Sensor history sheet. Its own dialog rather than the confirm sheet's: it
+     holds a chart that outlives a single tap, and closing it must not run the
+     confirm sheet's teardown of codes and colour widgets. -->
+<div class="fixed inset-0 z-40 hidden items-end justify-center bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="history-backdrop">
+  <div class="sheet-animate bg-surface-light dark:bg-surface-dark rounded-t-2xl p-5 w-full max-w-lg" role="dialog" aria-modal="true" aria-labelledby="history-title" style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <h3 class="text-lg font-serif truncate min-w-0" id="history-title"></h3>
+      <button type="button" data-action="close-history" aria-label="{{ t('page.history.close') }}"
+        class="w-9 h-9 flex items-center justify-center rounded-full bg-soot/5 dark:bg-white/5 flex-shrink-0">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <div class="flex mb-3 gap-1 p-1 rounded-xl bg-soot/5 dark:bg-white/5" role="group" aria-label="{{ t('page.history.range') }}">
+      {% for hours in [6, 24, 168] %}
+      <button type="button" data-action="history-range" data-hours="{{ hours }}" aria-pressed="false"
+        class="flex-1 py-2 rounded-lg text-sm font-display font-semibold text-muted tabular-nums"></button>
+      {% endfor %}
+    </div>
+    <div id="history-chart" class="w-full overflow-hidden"></div>
+    <p id="history-readout" class="text-sm text-center mt-2 tabular-nums min-h-[1.25rem]"></p>
+    <p id="history-status" class="text-sm text-muted text-center py-6 hidden" aria-live="polite"></p>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast-container" aria-live="polite" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2"></div>
 {% endblock %}
@@ -477,6 +501,8 @@ const SLUG = {{ slug | tojson }};
 // /api/hassio_ingress/<token>/, so every guest API call has to carry the prefix
 // the same way the static asset tags above do.
 const BASE = {{ base_path | tojson }};
+// For assets the script loads itself, so they carry the same ?v= as the tags.
+const BUILD_VERSION = {{ build_version | tojson }};
 const EXPIRES_AT = {{ expires_at | tojson }};
 const NEVER_EXPIRES = {{ never_expires }};
 // True only when this token has at least one proximity-gated entity. Rendered
@@ -914,23 +940,31 @@ function buildCard(eid, state) {
     aria-label="${esc(tr('card.toggle', { name }))}"
     data-action="toggle" data-eid="${esc(eid)}" data-domain="${domain}"
     ></div>` : '';
+  // A sensor the admin shared the history of opens its chart from anywhere on
+  // the tile, and says so with the chart glyph where a toggle would sit.
+  const hasHistory = domain === 'sensor' && entityOption(eid, 'show_history');
+  const historyHtml = hasHistory
+    ? '<span aria-hidden="true" class="material-symbols-outlined text-muted flex-shrink-0">show_chart</span>'
+    : '';
 
   // The whole tile is the hit target for anything with a toggle; domains with
   // their own controls (climate, lock, cover, media, camera) are left alone.
   const cardTap = hasToggle
     ? `data-action="card-toggle" data-eid="${esc(eid)}" data-domain="${domain}" role="button" tabindex="0" aria-label="${esc(tr('card.toggle', { name }))}" `
-    : '';
+    : hasHistory
+      ? `data-action="open-history" data-eid="${esc(eid)}" role="button" tabindex="0" aria-label="${esc(tr('history.open', { name }))}" `
+      : '';
 
   // Borderless, after Mushroom: the shadow alone lifts the card off the page,
   // which reads softer than a ruled box and lets the tinted shape lead.
-  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 mb-2 shadow-card ${hasToggle ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
+  return `<div ${cardTap}class="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 mb-2 shadow-card ${hasToggle || hasHistory ? 'cursor-pointer select-none' : ''} ${opacityClass}" id="card-${cssId(eid)}">
     <div class="flex items-center gap-3">
       ${entityShapeHtml(eid, domain, state, icon)}
       <div class="flex-1 min-w-0">
         <div class="text-sm font-semibold leading-tight truncate${locationBadge ? ' flex items-center gap-1' : ''}">${esc(name)}${locationBadge}</div>
         <div class="text-xs text-muted leading-tight mt-0.5" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
       </div>
-      ${toggleHtml}
+      ${toggleHtml}${historyHtml}
     </div>
     ${controls}
   </div>`;
@@ -2199,6 +2233,226 @@ function closeSheet() {
   releaseFocus();
 }
 
+// ── Sensor History (bottom sheet) ────────────────────────────────────
+// uPlot is fetched the first time a guest opens a chart, so a link with no
+// shared history never downloads it. The tags are same-origin, which the
+// page's script-src 'self' admits without a nonce.
+const HISTORY_CHART_HEIGHT = 240;
+let historyEid = null;
+let historyHours = 24;
+let historyPlot = null;
+let historyRequest = 0;
+let uplotLoading = null;
+
+function loadUplot() {
+  if (window.uPlot) return Promise.resolve();
+  if (!uplotLoading) {
+    uplotLoading = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = `${BASE}/static/uPlot.min.css?v=${BUILD_VERSION}`;
+      document.head.appendChild(css);
+      const script = document.createElement('script');
+      script.src = `${BASE}/static/uPlot.iife.min.js?v=${BUILD_VERSION}`;
+      script.onload = resolve;
+      // Forget the failure, so the next open tries again rather than
+      // replaying it.
+      script.onerror = () => { uplotLoading = null; script.remove(); reject(new Error('uPlot')); };
+      document.head.appendChild(script);
+    });
+  }
+  return uplotLoading;
+}
+
+// "6h", "24 Std.", "7 d" — the browser's own short units, so the range
+// buttons need no strings of their own in each language.
+function historyRangeLabel(hours) {
+  const days = hours > 24 && hours % 24 === 0;
+  const n = days ? hours / 24 : hours;
+  try {
+    return new Intl.NumberFormat(uiLocale(), { style: 'unit', unit: days ? 'day' : 'hour', unitDisplay: 'narrow' }).format(n);
+  } catch {
+    return days ? `${n}d` : `${n}h`;
+  }
+}
+
+function setHistoryStatus(text) {
+  const el = document.getElementById('history-status');
+  el.textContent = text || '';
+  el.classList.toggle('hidden', !text);
+}
+
+function destroyHistoryPlot() {
+  if (historyPlot) historyPlot.destroy();
+  historyPlot = null;
+  document.getElementById('history-readout').textContent = '';
+}
+
+function openHistory(eid) {
+  // A pending link has no state to chart, and the server would refuse it.
+  if (PENDING) return;
+  historyEid = eid;
+  document.getElementById('history-title').textContent = displayName(eid, states[eid]);
+  document.querySelectorAll('[data-action="history-range"]').forEach(b => {
+    b.textContent = historyRangeLabel(Number(b.dataset.hours));
+  });
+  const backdrop = document.getElementById('history-backdrop');
+  backdrop.classList.remove('hidden');
+  backdrop.classList.add('flex');
+  trapFocus(backdrop.querySelector('[role="dialog"]'));
+  showHistoryRange(historyHours);
+}
+
+function closeHistory() {
+  const backdrop = document.getElementById('history-backdrop');
+  backdrop.querySelector('[role="dialog"]').removeEventListener('keydown', _handleTrapKeydown);
+  backdrop.classList.remove('flex');
+  backdrop.classList.add('hidden');
+  historyEid = null;
+  historyRequest++;  // a fetch still in flight lands on nothing
+  destroyHistoryPlot();
+  setHistoryStatus('');
+  releaseFocus();
+}
+
+async function showHistoryRange(hours) {
+  historyHours = hours;
+  document.querySelectorAll('[data-action="history-range"]').forEach(btn => {
+    const active = Number(btn.dataset.hours) === hours;
+    btn.setAttribute('aria-pressed', String(active));
+    btn.classList.toggle('bg-surface-light', active);
+    btn.classList.toggle('dark:bg-surface-dark', active);
+    btn.classList.toggle('shadow-sm', active);
+    btn.classList.toggle('text-muted', !active);
+  });
+  const eid = historyEid;
+  const request = ++historyRequest;
+  destroyHistoryPlot();
+  setHistoryStatus(tr('history.loading'));
+  let points;
+  try {
+    const [, r] = await Promise.all([
+      loadUplot(),
+      fetch(`${BASE}/g/${SLUG}/history/${encodeURIComponent(eid)}?hours=${hours}`),
+    ]);
+    if (!r.ok) throw new Error(String(r.status));
+    points = (await r.json()).points;
+  } catch {
+    if (request === historyRequest) setHistoryStatus(tr('history.error'));
+    return;
+  }
+  // The guest moved on — another range, or closed the sheet — while this loaded.
+  if (request !== historyRequest) return;
+  drawHistory(eid, points, hours);
+}
+
+// The theme's colours as the canvas needs them: uPlot draws with strings, not
+// classes, so they are read off elements that already wear the classes.
+function historyColors() {
+  const muted = getComputedStyle(document.getElementById('history-status')).color;
+  const primary = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+  const rgb = (muted.match(/\d+(\.\d+)?/g) || ['128', '128', '128']).slice(0, 3).join(' ');
+  return {
+    line: primary ? `rgb(${primary})` : muted,
+    fill: primary ? `rgb(${primary} / 0.12)` : 'transparent',
+    text: muted,
+    grid: `rgb(${rgb} / 0.18)`,
+  };
+}
+
+function drawHistory(eid, points, hours) {
+  const xs = [];
+  const ys = [];
+  for (const [t, v] of points) {
+    xs.push(t);
+    ys.push(v);
+  }
+  // HA's last row is the last change, not now: carry the live reading to the
+  // right edge, so a sensor that has held one value for hours still reaches it.
+  const now = Date.now() / 1000 + CLOCK_OFFSET;
+  const live = states[eid]?.state;
+  const liveValue = live === undefined || live === null || live === '' ? NaN : Number(live);
+  if (!xs.length || now > xs[xs.length - 1]) {
+    xs.push(now);
+    ys.push(Number.isFinite(liveValue) ? liveValue : null);
+  }
+  if (!ys.some(v => v !== null)) {
+    setHistoryStatus(tr('history.empty'));
+    return;
+  }
+  setHistoryStatus('');
+
+  const unit = states[eid]?.attributes?.unit_of_measurement || '';
+  const numberFmt = new Intl.NumberFormat(uiLocale(), { maximumFractionDigits: 2 });
+  const valueText = v => v === null || v === undefined ? '\u2013' : `${numberFmt.format(v)}${unit ? ' ' + unit : ''}`;
+  // Times of day for a day or less; across a week the weekday leads.
+  const tickFmt = new Intl.DateTimeFormat(uiLocale(), hours > 24
+    ? { weekday: 'short', hour: 'numeric' }
+    : { hour: 'numeric', minute: '2-digit' });
+  const hoverFmt = new Intl.DateTimeFormat(uiLocale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  const colors = historyColors();
+  const box = document.getElementById('history-chart');
+  const readout = document.getElementById('history-readout');
+  let lastReading = ys.length - 1;
+  while (ys[lastReading] === null) lastReading--;
+  const showReading = i => {
+    readout.textContent = `${valueText(ys[i])} · ${hoverFmt.format(new Date(xs[i] * 1000))}`;
+  };
+  const font = '11px system-ui, -apple-system, sans-serif';
+  const axis = { stroke: colors.text, font, grid: { stroke: colors.grid, width: 1 }, ticks: { show: false } };
+
+  historyPlot = new uPlot({
+    width: box.clientWidth,
+    height: HISTORY_CHART_HEIGHT,
+    cursor: { drag: { x: false, y: false }, points: { size: 8 } },
+    // uPlot's own legend is a table in its own type; the readout under the
+    // chart says the same in the page's.
+    legend: { show: false },
+    scales: { x: { time: true, range: () => [now - hours * 3600, now] } },
+    series: [
+      {},
+      {
+        label: displayName(eid, states[eid]),
+        stroke: colors.line,
+        fill: colors.fill,
+        width: 2,
+        spanGaps: false,
+        points: { show: false },
+      },
+    ],
+    axes: [
+      { ...axis, values: (u, ticks) => ticks.map(t => tickFmt.format(new Date(t * 1000))) },
+      { ...axis, size: 48, values: (u, ticks) => ticks.map(v => numberFmt.format(v)) },
+    ],
+    hooks: {
+      // The point under the cursor, or the latest reading when there is none.
+      setCursor: [u => showReading(u.cursor.idx ?? lastReading)],
+      // uPlot follows a mouse on its own; a finger is fed to it here, so a
+      // guest on a phone can drag along the line to read it.
+      init: [u => {
+        u.over.style.touchAction = 'pan-y';
+        const follow = e => {
+          if (e.pointerType === 'mouse') return;
+          const r = u.over.getBoundingClientRect();
+          u.setCursor({ left: e.clientX - r.left, top: e.clientY - r.top });
+        };
+        u.over.addEventListener('pointerdown', follow);
+        u.over.addEventListener('pointermove', follow);
+      }],
+    },
+  }, [xs, ys], box);
+  showReading(lastReading);
+}
+
+window.addEventListener('resize', () => {
+  if (!historyPlot) return;
+  historyPlot.setSize({ width: document.getElementById('history-chart').clientWidth, height: HISTORY_CHART_HEIGHT });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && historyEid) closeHistory();
+});
+
 // ── Delegated Event Handlers ─────────────────────────────────────
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]');
@@ -2258,6 +2512,15 @@ document.addEventListener('click', e => {
       break;
     case 'close-sheet':
       closeSheet();
+      break;
+    case 'open-history':
+      openHistory(eid);
+      break;
+    case 'history-range':
+      showHistoryRange(Number(el.dataset.hours));
+      break;
+    case 'close-history':
+      closeHistory();
       break;
     case 'set-theme':
       setTheme(el.dataset.theme);

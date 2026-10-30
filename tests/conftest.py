@@ -110,6 +110,7 @@ def mock_ha_client():
         "invalidate_entity_cache": AsyncMock(),
         "camera_snapshot": AsyncMock(return_value=(b"\xff\xd8fake-jpeg", "image/jpeg")),
         "camera_stream": _fake_camera_stream,
+        "get_history": AsyncMock(return_value=[]),
         "get_home_zone": AsyncMock(return_value=dict(HOME_ZONE)),
         # None is "labels cannot be read" — the degraded default, so a test that
         # does not care about labels never reaches the real WS command. Tests
@@ -169,6 +170,14 @@ def _reset_registry_cache():
     ha_client._registry_cache = None
     ha_client._registry_cache_ts = 0.0
     ha_client._registry_denied_at = None
+
+
+@pytest.fixture(autouse=True)
+def _reset_history_cache():
+    """Clear the guest sensor-history cache between tests, for the same reason:
+    a sensor's points cached by one test would be served to the next."""
+    from app.routers.guest import _history_cache
+    _history_cache.clear()
 
 
 @pytest_asyncio.fixture

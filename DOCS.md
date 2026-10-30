@@ -86,6 +86,7 @@ Click a selected entity to open its options:
 - **Display name** — what the guest sees instead of the Home Assistant name, up to 64 characters. Leave blank to use the HA name.
 - **Show brightness slider** (lights only) — off by default, so a light is on/off unless you turn this on.
 - **Show colour controls** (lights only) — also off by default. Gives the guest a colour wheel, a warm–cool temperature slider, or both, depending on what the bulb supports.
+- **Show history graph** (sensors only) — off by default. The guest can tap the sensor to open a chart of its last 6 hours, 24 hours or 7 days, and drag along the line to read a value. The history comes from Home Assistant's recorder, so a sensor the recorder excludes has none, and 7 days needs the recorder to keep at least that long (its default is 10). A sensor whose state is text, not a number, shows "No readings in this period."
 - **Require the guest to be at the property** — see below.
 - **Only from the home network** — shown once **Home Network Ranges** is set. See below.
 

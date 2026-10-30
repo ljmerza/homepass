@@ -9,6 +9,12 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
+## [Unreleased]
+
+### Added
+
+- **Sensor history graphs.** A sensor on a link can now show its history to the guest. Tick **Show history graph** in the sensor's options when creating or editing the link. It is off by default, so existing links look the same. The guest taps the sensor to open a chart of the last 6 hours, 24 hours or 7 days from Home Assistant's recorder, and can drag along the line to read a value at any time. Gaps where the sensor was unavailable stay gaps. Only sensors with the option ticked are served, by a new `GET /g/{slug}/history/{entity_id}` route. Long ranges are averaged down to 500 points, results are cached for a minute, and each link may ask 30 times a minute. The chart uses [uPlot](https://github.com/leeoniya/uPlot) 1.6.32 (MIT), shipped in `static/` and only downloaded the first time a guest opens a chart. No database migration: the option rides in the existing per-entity options, so the admin and public APIs accept `show_history` there too.
+
 ## [1.3.0] - 2026-10-27
 
 ### Added

@@ -297,6 +297,14 @@
       <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.show_color_hint') }}</p>
     </div>
 
+    <div id="entity-sensor-options" class="mt-4 hidden">
+      <label class="flex items-center gap-2.5 cursor-pointer">
+        <input id="entity-show-history" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
+        <span class="text-sm">{{ t('page.entity.show_history') }}</span>
+      </label>
+      <p class="text-[11px] text-muted mt-1.5 ml-6.5">{{ t('page.entity.show_history_hint') }}</p>
+    </div>
+
     <div id="entity-proximity" class="mt-4 pt-4 border-t border-border-light dark:border-border-dark">
       <label class="flex items-center gap-2.5 cursor-pointer">
         <input id="entity-require-proximity" type="checkbox" class="w-4 h-4 rounded border-border-light dark:border-border-dark accent-primary">
@@ -1277,6 +1285,7 @@ function renderPicker(containerId, pickerState) {
           const renamed = m.display_name;
           const showsBrightness = m.options && m.options.show_brightness;
           const showsColor = m.options && m.options.show_color;
+          const showsHistory = m.options && m.options.show_history;
           const gated = m.require_proximity;
           const localOnly = LOCAL_NETWORK_CONFIGURED && m.require_local_network;
           return `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-edit" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="${esc(tr('picker.edit', { name: renamed || e.friendly_name || e.entity_id }))}">
@@ -1289,6 +1298,7 @@ function renderPicker(containerId, pickerState) {
               ${renamed ? '<span aria-hidden="true" class="material-symbols-outlined text-accent" style="font-size:14px" title="' + esc(tr('picker.renamed')) + '">edit</span>' : ''}
               ${showsBrightness ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="' + esc(tr('picker.brightness_shown')) + '">brightness_high</span>' : ''}
               ${showsColor ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="' + esc(tr('picker.color_shown')) + '">palette</span>' : ''}
+              ${showsHistory ? '<span aria-hidden="true" class="material-symbols-outlined text-muted" style="font-size:14px" title="' + esc(tr('picker.history_shown')) + '">show_chart</span>' : ''}
               ${gated ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="' + esc(tr('picker.gated')) + '">location_on</span>' : ''}
               ${localOnly ? '<span aria-hidden="true" class="material-symbols-outlined text-primary" style="font-size:14px" title="' + esc(tr('picker.local_only')) + '">wifi_lock</span>' : ''}
             </div>
@@ -2507,6 +2517,10 @@ function openEntityModal(containerId, entityId) {
     Boolean(meta.options && meta.options.show_brightness);
   document.getElementById('entity-show-color').checked =
     Boolean(meta.options && meta.options.show_color);
+  const isSensor = entityId.split('.')[0] === 'sensor';
+  document.getElementById('entity-sensor-options').classList.toggle('hidden', !isSensor);
+  document.getElementById('entity-show-history').checked =
+    Boolean(meta.options && meta.options.show_history);
 
   const gateable = !PROXIMITY_EXEMPT_DOMAINS.includes(entityId.split('.')[0]);
   document.getElementById('entity-proximity').classList.toggle('hidden', !gateable);
@@ -2536,10 +2550,13 @@ function submitEntityMeta() {
   const isLight = entityId.split('.')[0] === 'light';
   const showBrightness = isLight && document.getElementById('entity-show-brightness').checked;
   const showColor = isLight && document.getElementById('entity-show-color').checked;
+  const isSensor = entityId.split('.')[0] === 'sensor';
+  const showHistory = isSensor && document.getElementById('entity-show-history').checked;
 
   const options = {};
   if (showBrightness) options.show_brightness = true;
   if (showColor) options.show_color = true;
+  if (showHistory) options.show_history = true;
 
   // Sibling of options, not a member of it: the server stores it in its own
   // column because the command path enforces it, and options is presentation.

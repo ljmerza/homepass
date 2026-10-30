@@ -37,6 +37,7 @@ installs, just a link.
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
 - **Home-network-only controls** — mark individual entities as commandable only from your home network's IP ranges
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
+- **Sensor history** — opt a sensor in and the guest can tap it for a chart of its last 6 hours, 24 hours or 7 days
 - **Section headings** — rename the guest page's "Lights", "Switches" and other headings per link; guests can tap a heading to collapse its section unless the link locks it open
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
@@ -337,7 +338,7 @@ closed. Outside every window every guest route is refused, and the SSE stream
 and camera views stop when a window closes.
 
 **Single use** (`max_uses`, 1–1000) counts one use per guest command Home
-Assistant accepts. Page loads, `/state`, the stream and cameras never count, so
+Assistant accepts. Page loads, `/state`, the stream, cameras and sensor history never count, so
 a chat app unfurling the link cannot spend it; the claim is atomic and refunded
 if the HA call fails. Renew on a used-up link resets its count.
 
@@ -469,9 +470,17 @@ Open any selected entity in the picker to set:
 - **Show colour controls** (lights) — off by default. The guest gets an RGB wheel,
   a warm–cool temperature slider, or both, depending on what Home Assistant
   reports the light supports.
+- **Show history graph** (sensors) — off by default. The guest can tap the
+  sensor for a chart of its last 6 hours, 24 hours or 7 days, read from Home
+  Assistant's recorder.
 
 Neither light toggle gates the command path — putting a light on a link is what
-grants `light.turn_on`. They decide what the guest UI draws.
+grants `light.turn_on`. They decide what the guest UI draws. The history toggle
+is the one a guest route enforces: `/g/{slug}/history/{id}` refuses any sensor
+on the link that does not have it. It serves at most 500 points per range, so a
+busy sensor is averaged down. Results are cached for a minute, shared by every
+link carrying that sensor, and a link may ask 30 times a minute. The chart
+library (uPlot) only downloads the first time a guest opens a chart.
 
 ### Entity templates, labels and rotation
 
@@ -603,6 +612,7 @@ Browser (Guest PWA)
     ├── GET  /g/{slug}/state         → initial entity states
     ├── GET  /g/{slug}/stream        → SSE real-time updates
     ├── GET  /g/{slug}/camera/{id}   → camera still and MJPEG stream
+    ├── GET  /g/{slug}/history/{id}  → sensor history (opted-in sensors only)
     └── POST /g/{slug}/command       → service call proxy
                                       │
                                       ▼

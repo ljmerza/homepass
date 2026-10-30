@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
@@ -323,6 +324,31 @@ async def logbook_log(data: dict) -> Any:
     )
     resp.raise_for_status()
     return resp.json()
+
+
+async def get_history(entity_id: str, start: datetime, end: datetime) -> list[dict]:
+    """One entity's recorded states from start to end, oldest first.
+
+    The caller must already have checked entity_id against the token allowlist.
+    minimal_response and no_attributes keep the payload to state and time: the
+    first row is a full state, the rest are {"state", "last_changed"}.
+    """
+    async def _do():
+        resp = await _require_client().get(
+            f"/api/history/period/{start.isoformat()}",
+            params={
+                "filter_entity_id": entity_id,
+                "end_time": end.isoformat(),
+                "minimal_response": "",
+                "no_attributes": "",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+    result = await _retry_http(_do)
+    # One list per entity asked for, and none at all for an entity the
+    # recorder holds nothing on.
+    return result[0] if result else []
 
 
 # ---------------------------------------------------------------------------

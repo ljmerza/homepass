@@ -99,7 +99,11 @@ DISPLAY_NAME_MAX = 64
 # on/off only, and a token has to enable the slider or the colour wheel per
 # entity. Neither gates the command path: putting a light on a token is what
 # grants light.turn_on, so these only decide what the guest UI draws.
-ENTITY_OPTION_KEYS: set[str] = {"show_brightness", "show_color"}
+#
+# show_history is opt-in the same way, for sensors, and is the one option a
+# guest route does read: /g/{slug}/history serves nothing for an entity without
+# it, so a link only reveals the recorder's past for the sensors an admin picked.
+ENTITY_OPTION_KEYS: set[str] = {"show_brightness", "show_color", "show_history"}
 
 # Colour keys HA's light.turn_on understands. Only rgb_color and
 # color_temp_kelvin are accepted from a guest: they are what the colour wheel

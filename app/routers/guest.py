@@ -9,12 +9,14 @@ import ipaddress
 from contextlib import AsyncExitStack
 import json
 import logging
+import math
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Path, Request, status
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Path, Query, Request, status
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -78,6 +80,20 @@ COMMAND_LIMITS = ((60.0, COMMAND_BURST_RPM), (3600.0, COMMAND_SUSTAINED_RPH))
 # must not burn the command allowance that controls their lights.
 CAMERA_SNAPSHOT_RPM = 120
 
+# Sensor history for the guest chart. The ranges are a fixed set rather than
+# a free number of hours so the cache below holds at most three entries per
+# sensor, and seven days stays inside the recorder's default ten of retention.
+# A week of a busy sensor is tens of thousands of rows, so the server averages
+# them down to at most HISTORY_MAX_POINTS before they leave — more than a phone
+# screen has pixels across. The cache is shared by every link carrying the same
+# sensor: the gates run before it, and what it holds is the same for each.
+HISTORY_RANGES_HOURS = (6, 24, 168)
+HISTORY_DEFAULT_HOURS = 24
+HISTORY_MAX_POINTS = 500
+HISTORY_RPM = 30
+HISTORY_CACHE_SECONDS = 60
+_history_cache: dict[tuple[str, int], tuple[float, list]] = {}
+
 # Each live MJPEG view holds one upstream connection to HA open for its whole
 # lifetime, so this is capped per token rather than rate-limited per minute.
 # Cameras stream for as long as the guest page is open, so the real consumption
@@ -135,6 +151,8 @@ ACCESS_CODE_LIMITS_PER_TOKEN = ((60.0, 30), (3600.0, 300))
 # is interpolated into the upstream HA request, so it is matched against an exact
 # shape rather than merely checked for membership.
 _CAMERA_ENTITY_RE = re.compile(r"^camera\.[a-z0-9_]+$")
+# The history route takes entity_id from its path too, and hands it to HA.
+_HISTORY_ENTITY_RE = re.compile(r"^sensor\.[a-z0-9_]+$")
 
 # L-8: Whitelist of allowed SSE event types
 _ALLOWED_SSE_EVENTS = {
@@ -1395,6 +1413,125 @@ async def guest_state(request: Request, slug: str = Path(max_length=64)):
         "entity_meta": meta,
         "group_headings": db.group_headings_from_row(row["group_headings"]),
     }
+
+
+# ---------------------------------------------------------------------------
+# Sensor history
+# ---------------------------------------------------------------------------
+
+def _history_value(state: str | None) -> float | None:
+    """A recorded state as a number, or None for a gap — unavailable, unknown,
+    or a sensor whose state is text."""
+    try:
+        value = float(state)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _history_time(row: dict) -> float | None:
+    stamp = row.get("last_changed") or row.get("last_updated")
+    try:
+        return datetime.fromisoformat(stamp).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _downsample_history(rows: list[dict], start: float, end: float) -> list[list]:
+    """HA's rows as [[unix seconds, value or None], ...], oldest first.
+
+    Up to HISTORY_MAX_POINTS points pass through as they are. Past that the
+    range is cut into that many equal slices and each becomes one point: the
+    mean of its numeric values, at the slice's first timestamp. A slice holding
+    only gaps stays a gap, so an outage still breaks the line; an empty slice is
+    left out, so a sensor that sat still for an hour does not.
+    """
+    points = []
+    for row in rows:
+        ts = _history_time(row)
+        if ts is not None:
+            points.append((ts, _history_value(row.get("state"))))
+    if len(points) <= HISTORY_MAX_POINTS:
+        return [[round(ts, 3), v] for ts, v in points]
+
+    width = (end - start) / HISTORY_MAX_POINTS
+    buckets: dict[int, list] = {}
+    for ts, value in points:
+        index = min(HISTORY_MAX_POINTS - 1, max(0, int((ts - start) / width)))
+        buckets.setdefault(index, [ts, []])[1].append(value)
+    out = []
+    for index in sorted(buckets):
+        ts, values = buckets[index]
+        numbers = [v for v in values if v is not None]
+        out.append([round(ts, 3), round(sum(numbers) / len(numbers), 3) if numbers else None])
+    return out
+
+
+async def _sensor_history(entity_id: str, hours: int) -> list[list]:
+    key = (entity_id, hours)
+    now = time.time()
+    cached = _history_cache.get(key)
+    if cached and now - cached[0] < HISTORY_CACHE_SECONDS:
+        return cached[1]
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=hours)
+    rows = await ha_client.get_history(entity_id, start, end)
+    points = _downsample_history(rows, start.timestamp(), end.timestamp())
+    # Expired entries go on every write, so the cache never outgrows the
+    # sensors guests have looked at in the last minute.
+    for k in [k for k, (at, _) in _history_cache.items() if now - at >= HISTORY_CACHE_SECONDS]:
+        del _history_cache[k]
+    _history_cache[key] = (now, points)
+    return points
+
+
+@router.get("/{slug}/history/{entity_id}")
+async def guest_history(
+    request: Request,
+    slug: str = Path(max_length=64),
+    entity_id: str = Path(max_length=255),
+    hours: int = Query(HISTORY_DEFAULT_HOURS),
+):
+    """A sensor's recent history, for a link whose admin opted it in.
+
+    Read-only, like /state, so the proximity and home-network gates — which
+    guard commands — do not apply. Order matters as it does for the camera:
+    token, shape, allowlist, then the per-entity opt-in.
+    """
+    row = await _validate_token(slug, request)
+
+    if not _HISTORY_ENTITY_RE.match(entity_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid sensor entity",
+        )
+    if hours not in HISTORY_RANGES_HOURS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"hours must be one of {', '.join(map(str, HISTORY_RANGES_HOURS))}",
+        )
+
+    entity_ids = await db.get_token_entities(row["id"])
+    if entity_id not in entity_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Entity not in allowlist")
+    meta = await db.get_token_entity_meta(row["id"])
+    options = (meta.get(entity_id) or {}).get("options") or {}
+    if not options.get("show_history"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="History not shared for this entity")
+
+    if not await rate_limiter.check(f"hist:{row['id']}", HISTORY_RPM):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
+
+    try:
+        points = await _sensor_history(entity_id, hours)
+    except Exception:
+        logger.warning("History fetch failed for %s", entity_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="History unavailable")
+
+    return JSONResponse(
+        {"entity_id": entity_id, "hours": hours, "points": points},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 # ---------------------------------------------------------------------------

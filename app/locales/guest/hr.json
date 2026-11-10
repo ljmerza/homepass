@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Kôd alarma",
   "page.history.close": "Zatvori",
   "page.history.range": "Vremensko razdoblje",
+  "page.history.compare": "Usporedi",
   "card.toggle": "Prebaci {name}",
   "card.needs_location": "Morate biti na lokaciji",
   "history.open": "Prikaži povijest: {name}",

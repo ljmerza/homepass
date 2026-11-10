@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Riasztókód",
   "page.history.close": "Bezárás",
   "page.history.range": "Időtartam",
+  "page.history.compare": "Összehasonlítás",
   "card.toggle": "{name} kapcsolása",
   "card.needs_location": "A helyszínen kell lennie",
   "history.open": "{name} előzményeinek megjelenítése",

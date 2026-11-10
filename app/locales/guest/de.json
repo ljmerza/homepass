@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Alarmcode",
   "page.history.close": "Schließen",
   "page.history.range": "Zeitraum",
+  "page.history.compare": "Vergleichen",
   "card.toggle": "{name} umschalten",
   "card.needs_location": "Du musst vor Ort sein",
   "history.open": "Verlauf von {name} anzeigen",

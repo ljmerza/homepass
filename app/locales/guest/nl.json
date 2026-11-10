@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Alarmcode",
   "page.history.close": "Sluiten",
   "page.history.range": "Periode",
+  "page.history.compare": "Vergelijken",
   "card.toggle": "{name} schakelen",
   "card.needs_location": "Je moet ter plaatse zijn",
   "history.open": "Geschiedenis van {name} tonen",

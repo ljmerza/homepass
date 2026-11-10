@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Hälytyskoodi",
   "page.history.close": "Sulje",
   "page.history.range": "Aikaväli",
+  "page.history.compare": "Vertaa",
   "card.toggle": "Vaihda: {name}",
   "card.needs_location": "Sinun on oltava paikan päällä",
   "history.open": "Näytä historia: {name}",

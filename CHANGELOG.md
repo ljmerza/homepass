@@ -9,6 +9,12 @@ HomePass is a fork of [Rohithkadaveru/ha-pass](https://github.com/Rohithkadaveru
 unmaintained upstream since April 2026. Releases up to and including 0.2.4 are
 upstream's; 0.3.0 is the first release from this fork.
 
+## [Unreleased]
+
+### Added
+
+- **Compare sensors on a history graph.** When a link shares the history of two or more sensors with the same unit, the guest's chart now lists the others under it. Tapping one draws it on the same chart in its own colour, up to 6 at once, and the rows show each sensor's value as the guest drags along the chart. Gaps stay gaps on every line. The guest's browser remembers which sensors they compare, per link, so the combined chart opens from any of them next time. Nothing to set up and nothing new on the server: it uses the sensors that already have **Show history graph** ticked, each line is one request to the existing history route, and a sensor with nothing to compare with looks the same as before. Requested on [#20](https://github.com/ljmerza/homepass/pull/20).
+
 ## [1.4.0] - 2026-10-29
 
 ### Added

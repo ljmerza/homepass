@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Código de la alarma",
   "page.history.close": "Cerrar",
   "page.history.range": "Periodo",
+  "page.history.compare": "Comparar",
   "card.toggle": "Alternar {name}",
   "card.needs_location": "Requiere que estés en la propiedad",
   "history.open": "Mostrar historial de {name}",

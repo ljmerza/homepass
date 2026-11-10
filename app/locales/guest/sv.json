@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Larmkod",
   "page.history.close": "Stäng",
   "page.history.range": "Tidsperiod",
+  "page.history.compare": "Jämför",
   "card.toggle": "Växla {name}",
   "card.needs_location": "Du måste vara på plats",
   "history.open": "Visa historik för {name}",

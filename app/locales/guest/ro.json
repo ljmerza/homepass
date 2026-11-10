@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Codul alarmei",
   "page.history.close": "Închide",
   "page.history.range": "Interval de timp",
+  "page.history.compare": "Compară",
   "card.toggle": "Comută {name}",
   "card.needs_location": "Trebuie să fii la proprietate",
   "history.open": "Afișează istoricul pentru {name}",

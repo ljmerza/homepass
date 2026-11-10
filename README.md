@@ -37,7 +37,7 @@ installs, just a link.
 - **Proximity requirement** — mark individual entities as usable only from inside HA's `zone.home`
 - **Home-network-only controls** — mark individual entities as commandable only from your home network's IP ranges
 - **Per-entity overrides** — rename an entity for the guest, and opt lights into a brightness slider and colour controls
-- **Sensor history** — opt a sensor in and the guest can tap it for a chart of its last 6 hours, 24 hours or 7 days
+- **Sensor history** — opt a sensor in and the guest can tap it for a chart of its last 6 hours, 24 hours or 7 days, and lay the link's other shared sensors of the same unit over it to compare them
 - **Section headings** — rename the guest page's "Lights", "Switches" and other headings per link; guests can tap a heading to collapse its section unless the link locks it open
 - **Camera streaming** — read-only live views; no `camera.*` service is reachable
 - **Entity templates and label filtering** — save a named selection, filter the picker by HA label, bulk-add every match
@@ -472,7 +472,8 @@ Open any selected entity in the picker to set:
   reports the light supports.
 - **Show history graph** (sensors) — off by default. The guest can tap the
   sensor for a chart of its last 6 hours, 24 hours or 7 days, read from Home
-  Assistant's recorder.
+  Assistant's recorder. When two or more sensors with the same unit have it on
+  a link, the guest can draw them on one chart to compare them.
 
 Neither light toggle gates the command path — putting a light on a link is what
 grants `light.turn_on`. They decide what the guest UI draws. The history toggle
@@ -481,6 +482,15 @@ on the link that does not have it. It serves at most 500 points per range, so a
 busy sensor is averaged down. Results are cached for a minute, shared by every
 link carrying that sensor, and a link may ask 30 times a minute. The chart
 library (uPlot) only downloads the first time a guest opens a chart.
+
+Comparing sensors is the guest page's own doing and needs nothing set up. The
+rows under the chart list the link's other sensors with **Show history graph**
+ticked and the same unit of measurement, and tapping one draws it on the chart
+in its own colour. Each line is one request to the history route, so a
+compared sensor passes the same checks as one opened on its own, and at most 6
+are drawn at once. The page keeps what it fetched for a minute, so switching a
+line off and on again costs nothing from the 30. Which sensors a guest compares
+is remembered in that browser, per link.
 
 ### Entity templates, labels and rotation
 

@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Cód an aláraim",
   "page.history.close": "Dún",
   "page.history.range": "Tréimhse ama",
+  "page.history.compare": "Cuir i gcomparáid",
   "card.toggle": "Scoránaigh {name}",
   "card.needs_location": "Caithfidh tú a bheith ar an láthair",
   "history.open": "Taispeáin stair: {name}",

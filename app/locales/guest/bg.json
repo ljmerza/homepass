@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Код на алармата",
   "page.history.close": "Затвори",
   "page.history.range": "Период",
+  "page.history.compare": "Сравни",
   "card.toggle": "Превключи {name}",
   "card.needs_location": "Трябва да сте на място",
   "history.open": "Покажи историята на {name}",

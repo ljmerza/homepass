@@ -478,6 +478,15 @@ applyStoredInfoState();
     </div>
     <div id="history-chart" class="w-full overflow-hidden"></div>
     <p id="history-readout" class="text-sm text-center mt-2 tabular-nums min-h-[1.25rem]"></p>
+    {# Only shown for a sensor that has others to be compared with: the rows are
+       the chart's legend and the switches that lay those sensors over it. The
+       list scrolls on its own, so a link with many of them keeps the chart on
+       screen; its padding is room for a row's focus ring, which the scrolling
+       would otherwise clip. #}
+    <div id="history-legend" class="mt-2 hidden">
+      <p class="text-xs text-muted">{{ t('page.history.compare') }}</p>
+      <div id="history-legend-rows" class="max-h-40 overflow-y-auto p-1 -m-1" role="group" aria-label="{{ t('page.history.compare') }}"></div>
+    </div>
     <p id="history-status" class="text-sm text-muted text-center py-6 hidden" aria-live="polite"></p>
   </div>
 </div>
@@ -2244,6 +2253,141 @@ let historyPlot = null;
 let historyRequest = 0;
 let uplotLoading = null;
 
+// Comparing sensors. A sensor's chart can have the link's other shared sensors
+// of the same unit laid over it, each in a colour of its own: [light, dark],
+// a set checked for telling its neighbours apart with a colour deficiency.
+// The colour belongs to the sensor (its place among the ones it can be
+// compared with), never to the order they were switched on in, so a line
+// keeps its colour as others come and go.
+const HISTORY_SERIES_COLORS = [
+  ['#2a78d6', '#3987e5'], ['#eb6834', '#d95926'], ['#1baf7a', '#199e70'],
+  ['#eda100', '#c98500'], ['#e87ba4', '#d55181'], ['#008300', '#008300'],
+];
+// Every line on the chart is a request of its own, and switching one on or off
+// redraws them all. What was fetched is kept for as long as the server would
+// answer from its own cache anyway, so only a new line costs a request.
+const HISTORY_REUSE_MS = 60000;
+const historyFetched = new Map();
+// The sensors the guest draws together, as { entity_id: unit }, remembered per
+// link so the combined chart is one tap away on the next visit. The unit is
+// kept because an unavailable sensor reports none, and that is when its line
+// is most worth seeing next to the others.
+const HISTORY_COMPARE_KEY = 'hp-compare:' + SLUG;
+const historyCompare = {};
+
+// localStorage can be missing or throw (private mode, storage blocked), and
+// what it holds may not be what this page wrote. Comparing then still works,
+// it just starts from nothing on the next visit.
+function loadHistoryCompare() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(HISTORY_COMPARE_KEY) || '{}');
+    for (const [id, unit] of Object.entries(stored)) {
+      if (typeof unit === 'string') historyCompare[id] = unit;
+    }
+  } catch { /* nothing remembered */ }
+}
+loadHistoryCompare();
+
+function saveHistoryCompare() {
+  try { window.localStorage.setItem(HISTORY_COMPARE_KEY, JSON.stringify(historyCompare)); } catch { /* not remembered */ }
+}
+
+// A sensor's unit, falling back to the one it had when the guest last compared
+// it: Home Assistant drops the attributes of an unavailable entity.
+function historyUnit(eid) {
+  return states[eid]?.attributes?.unit_of_measurement || historyCompare[eid] || '';
+}
+
+// The sensors whose lines can share a chart with eid's, itself among them, in
+// page order: the ones on the link with their history shared and the same
+// unit. One axis only, so a sensor in another unit is never offered, and one
+// with no unit has nothing that says another measures the same thing.
+function historyPeers(eid) {
+  const unit = historyUnit(eid);
+  if (!unit) return [eid];
+  return entityOrder.filter(id => id === eid || (
+    id.split('.')[0] === 'sensor' && entityOption(id, 'show_history') && historyUnit(id) === unit
+  ));
+}
+
+// One row per peer: { eid, slot, on, blocked }. `slot` is the sensor's colour.
+// `on` is drawn: always the sensor the sheet was opened for, and, once the
+// guest has compared it with anything, every peer they are comparing. With
+// more peers than colours two of them share one, and `blocked` marks the one
+// that has to wait for the other to be switched off.
+function historySeries(eid) {
+  const rows = historyPeers(eid).map((id, i) => (
+    { eid: id, slot: i % HISTORY_SERIES_COLORS.length, on: false, blocked: false }
+  ));
+  const taken = new Set();
+  const draw = row => {
+    if (taken.has(row.slot)) return;
+    taken.add(row.slot);
+    row.on = true;
+  };
+  const comparing = id => Object.prototype.hasOwnProperty.call(historyCompare, id);
+  const own = rows.find(r => r.eid === eid);
+  if (own) draw(own);
+  if (comparing(eid)) rows.filter(r => comparing(r.eid)).forEach(draw);
+  for (const row of rows) row.blocked = !row.on && taken.has(row.slot);
+  return rows;
+}
+
+function historySeriesColor(slot) {
+  return HISTORY_SERIES_COLORS[slot][document.documentElement.classList.contains('dark') ? 1 : 0];
+}
+
+// The rows under the chart: its legend, and for every sensor but the one the
+// sheet was opened for, the switch that draws it. The text stays in the page's
+// own ink; the dot carries the colour, filled when the line is drawn.
+function historyLegendHtml(eid, rows) {
+  if (rows.length < 2) return '';
+  return rows.map(r => {
+    const color = historySeriesColor(r.slot);
+    const body = `<span aria-hidden="true" class="w-3 h-3 rounded-full border-2 flex-shrink-0" style="border-color:${color};${r.on ? `background-color:${color}` : ''}"></span>
+      <span class="flex-1 min-w-0 truncate">${esc(displayName(r.eid, states[r.eid]))}</span>
+      <span class="text-muted tabular-nums flex-shrink-0" data-history-value="${esc(r.eid)}"></span>`;
+    const layout = 'w-full flex items-center gap-2.5 py-2 rounded-lg text-sm text-left';
+    if (r.eid === eid) return `<div class="${layout}">${body}</div>`;
+    return `<button type="button" data-action="history-compare" data-eid="${esc(r.eid)}" aria-pressed="${r.on}"${r.blocked ? ' disabled' : ''}
+      class="${layout}${r.on ? '' : ' text-muted'}${r.blocked ? ' opacity-40' : ''}">${body}</button>`;
+  }).join('');
+}
+
+function renderHistoryLegend(rows) {
+  document.getElementById('history-legend').classList.toggle('hidden', rows.length < 2);
+  document.getElementById('history-legend-rows').innerHTML = historyLegendHtml(historyEid, rows);
+}
+
+// Switching a peer on remembers both ends, so the pair is drawn together from
+// whichever of them the guest opens next. Switching it off forgets only that one.
+function toggleHistoryCompare(eid) {
+  if (!historyEid || eid === historyEid) return;
+  const row = historySeries(historyEid).find(r => r.eid === eid);
+  if (!row || row.blocked) return;
+  if (row.on) {
+    delete historyCompare[eid];
+  } else {
+    historyCompare[historyEid] = historyUnit(historyEid);
+    historyCompare[eid] = historyUnit(eid);
+  }
+  saveHistoryCompare();
+  // The legend is redrawn, which would drop a keyboard user's place in it.
+  loadHistory(true);
+  document.querySelector(`[data-action="history-compare"][data-eid="${eid}"]`)?.focus();
+}
+
+async function fetchHistory(eid, hours) {
+  const key = `${eid}|${hours}`;
+  const kept = historyFetched.get(key);
+  if (kept && Date.now() - kept.at < HISTORY_REUSE_MS) return kept.points;
+  const r = await fetch(`${BASE}/g/${SLUG}/history/${encodeURIComponent(eid)}?hours=${hours}`);
+  if (!r.ok) throw new Error(String(r.status));
+  const points = (await r.json()).points;
+  historyFetched.set(key, { at: Date.now(), points });
+  return points;
+}
+
 function loadUplot() {
   if (window.uPlot) return Promise.resolve();
   if (!uplotLoading) {
@@ -2325,25 +2469,48 @@ async function showHistoryRange(hours) {
     btn.classList.toggle('shadow-sm', active);
     btn.classList.toggle('text-muted', !active);
   });
+  await loadHistory(false);
+}
+
+// Fetch and draw every line the sheet is showing. keepChart leaves the chart
+// that is up where it is until the new one is ready, for switching a peer on
+// or off: only a change of range empties the sheet first.
+async function loadHistory(keepChart) {
   const eid = historyEid;
+  const hours = historyHours;
   const request = ++historyRequest;
-  destroyHistoryPlot();
-  setHistoryStatus(tr('history.loading'));
-  let points;
+  const rows = historySeries(eid);
+  renderHistoryLegend(rows);
+  if (!keepChart || !historyPlot) {
+    destroyHistoryPlot();
+    setHistoryStatus(tr('history.loading'));
+  }
+  const series = rows.filter(r => r.on);
+  let fetched;
   try {
-    const [, r] = await Promise.all([
+    [, ...fetched] = await Promise.all([
       loadUplot(),
-      fetch(`${BASE}/g/${SLUG}/history/${encodeURIComponent(eid)}?hours=${hours}`),
+      // The chart stands or falls with its own sensor. A peer that cannot be
+      // had (unshared since the page loaded, or one request too many) is left
+      // off it rather than taking the others down too.
+      ...series.map(r => fetchHistory(r.eid, hours).catch(err => {
+        if (r.eid === eid) throw err;
+        return null;
+      })),
     ]);
-    if (!r.ok) throw new Error(String(r.status));
-    points = (await r.json()).points;
   } catch {
-    if (request === historyRequest) setHistoryStatus(tr('history.error'));
+    if (request === historyRequest) {
+      destroyHistoryPlot();
+      setHistoryStatus(tr('history.error'));
+    }
     return;
   }
-  // The guest moved on — another range, or closed the sheet — while this loaded.
+  // The guest moved on — another range, another peer, or closed the sheet —
+  // while this loaded.
   if (request !== historyRequest) return;
-  drawHistory(eid, points, hours);
+  destroyHistoryPlot();
+  series.forEach((r, i) => { r.points = fetched[i]; });
+  drawHistory(eid, series.filter(r => r.points), hours, rows.length > 1);
 }
 
 // The theme's colours as the canvas needs them: uPlot draws with strings, not
@@ -2360,29 +2527,48 @@ function historyColors() {
   };
 }
 
-function drawHistory(eid, points, hours) {
-  const xs = [];
-  const ys = [];
-  for (const [t, v] of points) {
-    xs.push(t);
-    ys.push(v);
-  }
-  // HA's last row is the last change, not now: carry the live reading to the
-  // right edge, so a sensor that has held one value for hours still reaches it.
+// The chart's data as uPlot takes it: the times, then each line's values at
+// them. series is the rows being drawn, each with its points.
+function historyData(series, now) {
+  const tables = series.map(s => {
+    const xs = [];
+    const ys = [];
+    for (const [t, v] of s.points) {
+      xs.push(t);
+      ys.push(v);
+    }
+    // HA's last row is the last change, not now: carry the live reading to the
+    // right edge, so a sensor that has held one value for hours still reaches it.
+    const live = states[s.eid]?.state;
+    const liveValue = live === undefined || live === null || live === '' ? NaN : Number(live);
+    if (!xs.length || now > xs[xs.length - 1]) {
+      xs.push(now);
+      ys.push(Number.isFinite(liveValue) ? liveValue : null);
+    }
+    return [xs, ys];
+  });
+  if (tables.length === 1) return tables[0];
+  // The sensors report at their own times, so the lines are put on one shared
+  // set of them. A line then has no value at another's time, and uPlot draws
+  // straight across those. Mode 2 widens each real gap over them, so an outage
+  // still breaks its line.
+  return uPlot.join(tables, tables.map(() => [0, 2]));
+}
+
+// The sheet's own sensor is among the series. legend is whether the rows under
+// the chart are showing: they then carry each line's value, and the readout
+// only the time.
+function drawHistory(eid, series, hours, legend) {
   const now = Date.now() / 1000 + CLOCK_OFFSET;
-  const live = states[eid]?.state;
-  const liveValue = live === undefined || live === null || live === '' ? NaN : Number(live);
-  if (!xs.length || now > xs[xs.length - 1]) {
-    xs.push(now);
-    ys.push(Number.isFinite(liveValue) ? liveValue : null);
-  }
-  if (!ys.some(v => v !== null)) {
+  const data = historyData(series, now);
+  const xs = data[0];
+  if (!data.slice(1).some(ys => ys.some(v => v !== null && v !== undefined))) {
     setHistoryStatus(tr('history.empty'));
     return;
   }
   setHistoryStatus('');
 
-  const unit = states[eid]?.attributes?.unit_of_measurement || '';
+  const unit = historyUnit(eid);
   const numberFmt = new Intl.NumberFormat(uiLocale(), { maximumFractionDigits: 2 });
   const valueText = v => v === null || v === undefined ? '\u2013' : `${numberFmt.format(v)}${unit ? ' ' + unit : ''}`;
   // Times of day for a day or less; across a week the weekday leads.
@@ -2393,10 +2579,33 @@ function drawHistory(eid, points, hours) {
   const colors = historyColors();
   const box = document.getElementById('history-chart');
   const readout = document.getElementById('history-readout');
-  let lastReading = ys.length - 1;
-  while (ys[lastReading] === null) lastReading--;
-  const showReading = i => {
-    readout.textContent = `${valueText(ys[i])} · ${hoverFmt.format(new Date(xs[i] * 1000))}`;
+  const cells = {};
+  document.querySelectorAll('#history-legend-rows [data-history-value]').forEach(el => {
+    cells[el.dataset.historyValue] = el;
+  });
+  // Each line's latest reading, -1 for one that has none in this range.
+  const lasts = series.map((s, i) => {
+    let at = data[i + 1].length - 1;
+    while (at >= 0 && (data[i + 1][at] === null || data[i + 1][at] === undefined)) at--;
+    return at;
+  });
+  const latest = Math.max(...lasts);
+  // idx is the time under the cursor and idxs each line's own nearest point to
+  // it, which is the point uPlot marks; with no cursor, the latest readings.
+  const showReading = (idx, idxs) => {
+    const values = series.map((s, i) => {
+      const at = idx === null || idx === undefined ? lasts[i] : idxs?.[i + 1] ?? idx;
+      return valueText(at < 0 ? null : data[i + 1][at]);
+    });
+    const time = hoverFmt.format(new Date(xs[idx ?? latest] * 1000));
+    if (!legend) {
+      readout.textContent = `${values[0]} · ${time}`;
+      return;
+    }
+    readout.textContent = time;
+    series.forEach((s, i) => {
+      if (cells[s.eid]) cells[s.eid].textContent = values[i];
+    });
   };
   const font = '11px system-ui, -apple-system, sans-serif';
   const axis = { stroke: colors.text, font, grid: { stroke: colors.grid, width: 1 }, ticks: { show: false } };
@@ -2405,20 +2614,27 @@ function drawHistory(eid, points, hours) {
     width: box.clientWidth,
     height: HISTORY_CHART_HEIGHT,
     cursor: { drag: { x: false, y: false }, points: { size: 8 } },
-    // uPlot's own legend is a table in its own type; the readout under the
-    // chart says the same in the page's.
+    // uPlot's own legend is a table in its own type; the readout and the rows
+    // under the chart say the same in the page's.
     legend: { show: false },
     scales: { x: { time: true, range: () => [now - hours * 3600, now] } },
     series: [
       {},
-      {
-        label: displayName(eid, states[eid]),
-        stroke: colors.line,
-        fill: colors.fill,
-        width: 2,
-        spanGaps: false,
-        points: { show: false },
-      },
+      ...series.map(s => {
+        // A sensor with nothing to be compared with keeps the theme's colour.
+        // One that has takes its own, and the wash under a line goes as soon
+        // as there are two, where each would muddy the other.
+        const stroke = legend ? historySeriesColor(s.slot) : colors.line;
+        const fill = !legend ? colors.fill : series.length === 1 ? `${stroke}1f` : undefined;
+        return {
+          label: displayName(s.eid, states[s.eid]),
+          stroke,
+          fill,
+          width: 2,
+          spanGaps: false,
+          points: { show: false },
+        };
+      }),
     ],
     axes: [
       { ...axis, values: (u, ticks) => ticks.map(t => tickFmt.format(new Date(t * 1000))) },
@@ -2426,7 +2642,7 @@ function drawHistory(eid, points, hours) {
     ],
     hooks: {
       // The point under the cursor, or the latest reading when there is none.
-      setCursor: [u => showReading(u.cursor.idx ?? lastReading)],
+      setCursor: [u => showReading(u.cursor.idx, u.cursor.idxs)],
       // uPlot follows a mouse on its own; a finger is fed to it here, so a
       // guest on a phone can drag along the line to read it.
       init: [u => {
@@ -2440,8 +2656,8 @@ function drawHistory(eid, points, hours) {
         u.over.addEventListener('pointermove', follow);
       }],
     },
-  }, [xs, ys], box);
-  showReading(lastReading);
+  }, data, box);
+  showReading(null);
 }
 
 window.addEventListener('resize', () => {
@@ -2518,6 +2734,9 @@ document.addEventListener('click', e => {
       break;
     case 'history-range':
       showHistoryRange(Number(el.dataset.hours));
+      break;
+    case 'history-compare':
+      toggleHistoryCompare(eid);
       break;
     case 'close-history':
       closeHistory();

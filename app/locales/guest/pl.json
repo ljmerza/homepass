@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Kod alarmu",
   "page.history.close": "Zamknij",
   "page.history.range": "Zakres czasu",
+  "page.history.compare": "Porównaj",
   "card.toggle": "Przełącz: {name}",
   "card.needs_location": "Musisz być na miejscu",
   "history.open": "Pokaż historię: {name}",

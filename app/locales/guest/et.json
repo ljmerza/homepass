@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Häirekood",
   "page.history.close": "Sulge",
   "page.history.range": "Ajavahemik",
+  "page.history.compare": "Võrdle",
   "card.toggle": "Lülita: {name}",
   "card.needs_location": "Pead olema kohapeal",
   "history.open": "Näita ajalugu: {name}",

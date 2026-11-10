@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Κωδικός συναγερμού",
   "page.history.close": "Κλείσιμο",
   "page.history.range": "Χρονικό διάστημα",
+  "page.history.compare": "Σύγκριση",
   "card.toggle": "Εναλλαγή {name}",
   "card.needs_location": "Πρέπει να βρίσκεστε στο ακίνητο",
   "history.open": "Εμφάνιση ιστορικού για {name}",

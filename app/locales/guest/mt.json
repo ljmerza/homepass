@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Kodiċi tal-allarm",
   "page.history.close": "Agħlaq",
   "page.history.range": "Perjodu ta' żmien",
+  "page.history.compare": "Qabbel",
   "card.toggle": "Aqleb {name}",
   "card.needs_location": "Trid tkun fil-proprjetà",
   "history.open": "Uri l-istorja ta' {name}",

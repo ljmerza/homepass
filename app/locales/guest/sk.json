@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Kód alarmu",
   "page.history.close": "Zavrieť",
   "page.history.range": "Časové obdobie",
+  "page.history.compare": "Porovnať",
   "card.toggle": "Prepnúť {name}",
   "card.needs_location": "Musíte byť na mieste",
   "history.open": "Zobraziť históriu: {name}",

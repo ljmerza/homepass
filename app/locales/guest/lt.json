@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Signalizacijos kodas",
   "page.history.close": "Uždaryti",
   "page.history.range": "Laikotarpis",
+  "page.history.compare": "Palyginti",
   "card.toggle": "Perjungti: {name}",
   "card.needs_location": "Turite būti vietoje",
   "history.open": "Rodyti istoriją: {name}",

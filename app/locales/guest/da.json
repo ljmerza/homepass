@@ -58,6 +58,7 @@
   "page.sheet.code_label": "Alarmkode",
   "page.history.close": "Luk",
   "page.history.range": "Tidsrum",
+  "page.history.compare": "Sammenlign",
   "card.toggle": "Skift {name}",
   "card.needs_location": "Du skal være på stedet",
   "history.open": "Vis historik for {name}",
